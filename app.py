@@ -3,20 +3,18 @@ import pandas as pd
 import requests
 import plotly.graph_objects as go
 import time
-import urllib.parse
-import json
 from datetime import datetime, timedelta
 
 # 1. CẤU HÌNH TRANG
 st.set_page_config(page_title="Hệ thống Cảnh báo Chứng khoán Pro", layout="wide")
-st.title("📈 Hệ thống Phân tích Chứng khoán Pro (Giai đoạn 1 - Fix)")
+st.title("📈 Hệ thống Phân tích Chứng khoán Pro (VNDirect Ecosystem)")
 
 # 2. KHU VỰC ĐIỀU KHIỂN
 st.sidebar.header("⚙️ Bảng Điều Khiển")
 DANH_SACH_MA = ["TCB", "ACV", "OIL", "PVC", "DRI", "CSM", "TNT"]
 ma_chon = st.sidebar.selectbox("Chọn mã cổ phiếu phân tích chuyên sâu:", DANH_SACH_MA)
 
-# --- MODULE 1: KẾT NỐI BIỂU ĐỒ (VNDIRECT - TRỰC TIẾP) ---
+# --- MODULE 1: KẾT NỐI BIỂU ĐỒ (VNDIRECT DCHART) ---
 @st.cache_data(ttl=900, show_spinner=False)
 def lay_du_lieu_bieu_do(ma):
     loi_chi_tiet = []
@@ -45,62 +43,41 @@ def lay_du_lieu_bieu_do(ma):
 
     return pd.DataFrame(), "Thất bại 🔴", " | ".join(loi_chi_tiet)
 
-# --- MODULE 2 (TỐI ƯU): KẾT NỐI HỒ SƠ DOANH NGHIỆP 3 LỚP DỰ PHÒNG ---
+# --- MODULE 2 (NEW): HỒ SƠ DOANH NGHIỆP QUA VNDIRECT FINFO ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def lay_ho_so_doanh_nghiep(ma):
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-    url_tcbs = f"https://apipubaws.tcbs.com.vn/tcanalysis/v1/ticker/{ma}/overview"
-
-    # LỚP 1: TCBS qua Proxy AllOrigins (Chế độ GET bọc JSON an toàn)
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    profile = {
+        'industry': 'N/A', 'pe': 'N/A', 'pb': 'N/A', 'roe': 'N/A', 
+        'exchange': 'N/A', 'nguon_cap': 'Hệ sinh thái VNDirect'
+    }
+    
+    # 1. Kéo chỉ số định giá (P/E, P/B, ROE)
     try:
-        url_proxy1 = f"https://api.allorigins.win/get?url={urllib.parse.quote(url_tcbs)}"
-        res = requests.get(url_proxy1, headers=headers, timeout=8)
+        url_ratio = f"https://finfo-api.vndirect.com.vn/v4/ratios/latest?filter=ticker:{ma}"
+        res = requests.get(url_ratio, headers=headers, timeout=5)
         if res.status_code == 200:
-            wrapper = res.json()
-            # Bắt buộc TCBS phải trả về mã 200 thật, chống lỗi đọc HTML của tường lửa
-            if wrapper.get('status', {}).get('http_code') == 200:
-                data = json.loads(wrapper['contents'])
-                if isinstance(data, dict) and 'pe' in data and 'industry' in data:
-                    data['nguon_cap'] = 'TCBS (Proxy AllOrigins)'
-                    return data
+            data = res.json().get('data', [])
+            if data:
+                profile['pe'] = data[0].get('pe', 'N/A')
+                profile['pb'] = data[0].get('pb', 'N/A')
+                profile['roe'] = data[0].get('roe', 'N/A')
     except:
         pass
         
-    # LỚP 2: TCBS qua Proxy CodeTabs (Dự phòng ngắt kết nối)
+    # 2. Kéo Thông tin Ngành nghề & Sàn niêm yết
     try:
-        url_proxy2 = f"https://api.codetabs.com/v1/proxy?quest={urllib.parse.quote(url_tcbs)}"
-        res = requests.get(url_proxy2, headers=headers, timeout=8)
+        url_stock = f"https://finfo-api.vndirect.com.vn/v4/stocks?q=code:{ma}"
+        res = requests.get(url_stock, headers=headers, timeout=5)
         if res.status_code == 200:
-            data = res.json()
-            if isinstance(data, dict) and 'pe' in data and 'industry' in data:
-                data['nguon_cap'] = 'TCBS (Proxy CodeTabs)'
-                return data
+            data = res.json().get('data', [])
+            if data:
+                profile['industry'] = data[0].get('industryName', 'N/A')
+                profile['exchange'] = data[0].get('floor', 'N/A')
     except:
         pass
 
-    # LỚP 3: Cổng SSI FiinTrade (Cực kỳ mở và hiếm khi chặn Cloud)
-    try:
-        url_ssi = f"https://fiin-fundamental.ssi.com.vn/StockInfor/StockOverview/{ma}"
-        res = requests.get(url_ssi, headers=headers, timeout=5)
-        if res.status_code == 200:
-            item = res.json()
-            item = item.get('item', item) if isinstance(item, dict) else item
-            if isinstance(item, dict) and ('priceToEarning' in item or 'pe' in item):
-                return {
-                    'industry': item.get('icbName', 'N/A'),
-                    'pe': item.get('priceToEarning', item.get('pe', 'N/A')),
-                    'pb': item.get('priceToBook', item.get('pb', 'N/A')),
-                    'roe': item.get('roe', 'N/A'),
-                    'marketCap': item.get('marketCap', 0),
-                    'volume': item.get('matchedVolume', 0),
-                    'issueShare': item.get('outstandingShare', 0),
-                    'exchange': item.get('comGroupCode', 'N/A'),
-                    'nguon_cap': 'SSI FiinTrade'
-                }
-    except:
-        pass
-
-    return None
+    return profile
 
 # --- HÀM TÍNH RSI ---
 def tinh_rsi(series, period=14):
@@ -133,39 +110,37 @@ with tab1:
 # TAB 2: HỒ SƠ DOANH NGHIỆP
 with tab2:
     st.subheader(f"Báo cáo Tài chính Cơ bản - Mã: {ma_chon}")
-    with st.spinner("Đang chạy 3 lớp dự phòng để trích xuất dữ liệu tài chính..."):
+    with st.spinner("Đang trích xuất dữ liệu tài chính từ hệ sinh thái VNDirect..."):
         profile = lay_ho_so_doanh_nghiep(ma_chon)
-        if profile:
-            st.caption(f"Nguồn cấp dữ liệu: **{profile.get('nguon_cap', 'Không xác định')}**")
-            
-            # Hàng 1: Các chỉ số định giá
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Ngành nghề", str(profile.get('industry', 'N/A')))
-            
-            pe = profile.get('pe')
-            col2.metric("P/E (Định giá)", f"{pe:.2f}" if isinstance(pe, (int, float)) else "N/A")
-            
-            pb = profile.get('pb')
-            col3.metric("P/B (Giá/Sổ sách)", f"{pb:.2f}" if isinstance(pb, (int, float)) else "N/A")
-            
-            # Xử lý định dạng phần trăm cho ROE
-            roe = profile.get('roe')
-            if isinstance(roe, (int, float)):
-                roe_str = f"{roe*100:.2f}%" if roe < 1 else f"{roe:.2f}%"
-            else:
-                roe_str = "N/A"
-            col4.metric("ROE (Biên LN)", roe_str)
-
-            # Hàng 2: Thông tin quy mô
-            st.markdown("---")
-            st.write("📌 **Quy mô doanh nghiệp:**")
-            mc = profile.get('marketCap', 0)
-            st.write(f"- **Vốn hóa thị trường:** `{mc:,.0f}` tỷ VNĐ")
-            st.write(f"- **KLGD trung bình:** `{profile.get('volume', 0):,.0f}` cổ phiếu")
-            st.write(f"- **Tổng cổ phiếu lưu hành:** `{profile.get('issueShare', 0):,.0f}`")
-            st.write(f"- **Sàn niêm yết:** `{profile.get('exchange', 'N/A')}`")
+        st.caption(f"Nguồn cấp dữ liệu: **{profile.get('nguon_cap')}**")
+        
+        # Hàng 1: Các chỉ số định giá
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Ngành nghề", str(profile.get('industry', 'N/A')))
+        
+        pe = profile.get('pe')
+        col2.metric("P/E (Định giá)", f"{pe:.2f}" if isinstance(pe, (int, float)) else "N/A")
+        
+        pb = profile.get('pb')
+        col3.metric("P/B (Giá/Sổ sách)", f"{pb:.2f}" if isinstance(pb, (int, float)) else "N/A")
+        
+        roe = profile.get('roe')
+        if isinstance(roe, (int, float)):
+            # Tùy định dạng trả về của VNDirect, có thể là 0.15 hoặc 15
+            roe_str = f"{roe*100:.2f}%" if roe < 2 else f"{roe:.2f}%"
         else:
-            st.error("⚠️ Toàn bộ 3 lớp dự phòng đều quá tải hoặc bị chặn. Vui lòng thử lại sau vài phút.")
+            roe_str = "N/A"
+        col4.metric("ROE (Biên LN)", roe_str)
+
+        # Hàng 2: Thông tin giao dịch bổ sung từ biểu đồ (Tích hợp chéo)
+        st.markdown("---")
+        st.write("📌 **Thông tin thị trường (Dữ liệu chéo):**")
+        if 'df' in locals() and not df.empty:
+            gia_hien_tai = df['Close'].iloc[-1]
+            kl_hien_tai = df['Volume'].iloc[-1]
+            st.write(f"- **Thị giá hiện tại:** `{gia_hien_tai:,.0f}` VNĐ")
+            st.write(f"- **Khối lượng giao dịch gần nhất:** `{kl_hien_tai:,.0f}` cổ phiếu")
+        st.write(f"- **Sàn niêm yết:** `{profile.get('exchange', 'N/A')}`")
 
 # TAB 3: KHUYẾN NGHỊ RSI
 with tab3:
