@@ -14,7 +14,7 @@ st.sidebar.header("⚙️ Bảng Điều Khiển")
 DANH_SACH_MA = ["TCB", "ACV", "OIL", "PVC", "DRI", "CSM", "TNT"]
 ma_chon = st.sidebar.selectbox("Chọn mã cổ phiếu phân tích chuyên sâu:", DANH_SACH_MA)
 
-# --- VŨ KHÍ TỐI THƯỢNG: KẾT NỐI THẲNG VNDIRECT (KHÔNG BỊ CHẶN IP) ---
+# --- VŨ KHÍ TỐI THƯỢNG: KẾT NỐI THẲNG VNDIRECT VÀ GIẢI NÉN GIÁ ---
 @st.cache_data(ttl=900, show_spinner=False)
 def lay_du_lieu(ma):
     loi_chi_tiet = []
@@ -23,13 +23,12 @@ def lay_du_lieu(ma):
     start_ts = 1672531200 
     end_ts = 1717200000   
 
-    # Sử dụng cổng DChart API của VNDirect (Rất mở, hỗ trợ chuẩn TradingView)
+    # Sử dụng cổng DChart API của VNDirect
     try:
         url_vnd = f"https://dchart-api.vndirect.com.vn/dchart/history?symbol={ma}&resolution=D&from={start_ts}&to={end_ts}"
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
-        # Tăng thời gian chờ lên 7 giây cho an toàn
         res = requests.get(url_vnd, headers=headers, timeout=7)
         if res.status_code == 200:
             data = res.json()
@@ -38,6 +37,10 @@ def lay_du_lieu(ma):
                     'Date': pd.to_datetime(data['t'], unit='s'),
                     'Open': data['o'], 'High': data['h'], 'Low': data['l'], 'Close': data['c'], 'Volume': data['v']
                 })
+                
+                # GIẢI MÃ: Nhân 1000 để hoàn trả mệnh giá gốc cho dữ liệu của VNDirect
+                df[['Open', 'High', 'Low', 'Close']] = df[['Open', 'High', 'Low', 'Close']] * 1000
+                
                 # Cắt lấy 180 phiên giao dịch có thực gần nhất
                 return df.tail(180).reset_index(drop=True), "Máy chủ VNDirect 🟢", ""
             else:
