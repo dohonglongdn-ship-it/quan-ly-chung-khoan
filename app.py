@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from vnstock import *
+from vnstock import Vnstock # Import theo chuẩn mới
 import ta
 from datetime import datetime, timedelta
 
@@ -10,15 +10,16 @@ st.write("Ứng dụng tự động phân tích kỹ thuật dựa trên chỉ b
 
 DANH_SACH_MA = ["TCB", "ACV", "OIL", "PVC", "DRI", "CSM", "TNT"]
 ket_qua = []
-loi_chi_tiet = [] # Thêm bộ đếm lỗi
+loi_chi_tiet = []
 
 ngay_hom_nay = datetime.now().strftime('%Y-%m-%d')
 ngay_truoc_day = (datetime.now() - timedelta(days=180)).strftime('%Y-%m-%d')
 
 for ma in DANH_SACH_MA:
     try:
-        # Ép hệ thống lấy dữ liệu trực tiếp từ nguồn TCBS để tránh bị chặn IP
-        df = stock_historical_data(symbol=ma, start_date=ngay_truoc_day, end_date=ngay_hom_nay, resolution="1D", type="stock", source='TCBS')
+        # Sử dụng cú pháp mới của Vnstock 4.0 (Đổi nguồn sang VCI vì ổn định nhất hiện tại)
+        stock = Vnstock().stock(symbol=ma, source='VCI')
+        df = stock.quote.history(start=ngay_truoc_day, end=ngay_hom_nay)
         
         if df is not None and not df.empty:
             df['RSI'] = ta.momentum.rsi(df['close'], window=14)
@@ -46,6 +47,6 @@ if ket_qua:
     df_kq = pd.DataFrame(ket_qua)
     st.dataframe(df_kq, use_container_width=True)
 else:
-    st.warning("⚠️ Không thể vượt qua tường lửa của nguồn cấp dữ liệu. Nguyên nhân chi tiết bên dưới:")
+    st.warning("⚠️ Không thể lấy dữ liệu. Nguyên nhân chi tiết bên dưới:")
     for loi in loi_chi_tiet:
         st.error(loi)
