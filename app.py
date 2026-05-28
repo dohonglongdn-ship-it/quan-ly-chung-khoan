@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from vnstock import *
-import ta  # Đã đổi sang thư viện tính toán hiện đại hơn
+import ta
 from datetime import datetime, timedelta
 
 st.set_page_config(page_title="Hệ thống Cảnh báo Chứng khoán", layout="wide")
@@ -10,17 +10,17 @@ st.write("Ứng dụng tự động phân tích kỹ thuật dựa trên chỉ b
 
 DANH_SACH_MA = ["TCB", "ACV", "OIL", "PVC", "DRI", "CSM", "TNT"]
 ket_qua = []
+loi_chi_tiet = [] # Thêm bộ đếm lỗi
 
-# Lấy dữ liệu 6 tháng gần nhất
 ngay_hom_nay = datetime.now().strftime('%Y-%m-%d')
 ngay_truoc_day = (datetime.now() - timedelta(days=180)).strftime('%Y-%m-%d')
 
 for ma in DANH_SACH_MA:
     try:
-        df = stock_historical_data(symbol=ma, start_date=ngay_truoc_day, end_date=ngay_hom_nay, resolution="1D", type="stock")
+        # Ép hệ thống lấy dữ liệu trực tiếp từ nguồn TCBS để tránh bị chặn IP
+        df = stock_historical_data(symbol=ma, start_date=ngay_truoc_day, end_date=ngay_hom_nay, resolution="1D", type="stock", source='TCBS')
         
         if df is not None and not df.empty:
-            # Lệnh tính RSI của thư viện mới
             df['RSI'] = ta.momentum.rsi(df['close'], window=14)
             
             gia_hien_tai = df['close'].iloc[-1]
@@ -40,10 +40,12 @@ for ma in DANH_SACH_MA:
                 "Khuyến nghị": trang_thai
             })
     except Exception as e:
-        pass
+        loi_chi_tiet.append(f"Lỗi ở mã {ma}: {str(e)}")
 
 if ket_qua:
     df_kq = pd.DataFrame(ket_qua)
     st.dataframe(df_kq, use_container_width=True)
 else:
-    st.warning("⚠️ Nguồn dữ liệu từ bên thứ ba đang bận. Vui lòng tải lại trang sau ít phút.")
+    st.warning("⚠️ Không thể vượt qua tường lửa của nguồn cấp dữ liệu. Nguyên nhân chi tiết bên dưới:")
+    for loi in loi_chi_tiet:
+        st.error(loi)
