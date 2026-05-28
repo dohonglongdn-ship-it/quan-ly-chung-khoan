@@ -13,13 +13,12 @@ st.sidebar.header("⚙️ Bảng Điều Khiển")
 DANH_SACH_MA = ["TCB", "ACV", "OIL", "PVC", "DRI", "CSM", "TNT"]
 ma_chon = st.sidebar.selectbox("Chọn mã cổ phiếu phân tích chuyên sâu:", DANH_SACH_MA)
 
-# --- HÀM LẤY DỮ LIỆU TỪ DNSE (CÓ THÊM THẺ CĂN CƯỚC BROWSER) ---
+# --- HÀM LẤY DỮ LIỆU TỪ DNSE (CÓ KHIÊN CHỐNG LỖI NONETYPE) ---
 def lay_du_lieu_dnse(ma):
     end_ts = int(datetime.now().timestamp())
     start_ts = int((datetime.now() - timedelta(days=180)).timestamp())
     url = f"https://services.entrade.com.vn/chart-api/v2/ohlcs/stock?resolution=D&symbol={ma}&from={start_ts}&to={end_ts}"
     
-    # Vũ khí mới: Đóng giả làm trình duyệt Google Chrome trên máy tính Windows để qua mặt tường lửa
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'application/json, text/plain, */*'
@@ -30,7 +29,8 @@ def lay_du_lieu_dnse(ma):
         res = requests.get(url, headers=headers, timeout=10)
         if res.status_code == 200:
             data = res.json()
-            if 't' in data and len(data['t']) > 0:
+            # BỘ LỌC MỚI: Kiểm tra hộp dữ liệu có rỗng không trước khi đọc
+            if isinstance(data, dict) and data.get('t') is not None and len(data['t']) > 0:
                 df = pd.DataFrame({
                     'Date': pd.to_datetime(data['t'], unit='s'),
                     'Open': data['o'],
@@ -41,7 +41,7 @@ def lay_du_lieu_dnse(ma):
                 })
                 return df, loi_chi_tiet
             else:
-                loi_chi_tiet = "API DNSE không có dữ liệu cho mã này trong khoảng thời gian vừa qua."
+                loi_chi_tiet = "Truy cập thành công nhưng DNSE từ chối trả dữ liệu (Có thể IP đám mây bị hạn chế ngầm)."
         else:
             loi_chi_tiet = f"Bị chặn bởi tường lửa DNSE (Mã lỗi HTTP: {res.status_code})"
     except Exception as e:
