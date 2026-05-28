@@ -3,18 +3,19 @@ import pandas as pd
 import requests
 import plotly.graph_objects as go
 import time
+import urllib.parse # Thư viện bắt buộc để mã hóa link Proxy
 from datetime import datetime, timedelta
 
 # 1. CẤU HÌNH TRANG
 st.set_page_config(page_title="Hệ thống Cảnh báo Chứng khoán Pro", layout="wide")
-st.title("📈 Hệ thống Phân tích Chứng khoán Pro (Giai đoạn 1)")
+st.title("📈 Hệ thống Phân tích Chứng khoán Pro (Giai đoạn 1 - Fix)")
 
 # 2. KHU VỰC ĐIỀU KHIỂN
 st.sidebar.header("⚙️ Bảng Điều Khiển")
 DANH_SACH_MA = ["TCB", "ACV", "OIL", "PVC", "DRI", "CSM", "TNT"]
 ma_chon = st.sidebar.selectbox("Chọn mã cổ phiếu phân tích chuyên sâu:", DANH_SACH_MA)
 
-# --- MODULE 1: KẾT NỐI BIỂU ĐỒ (VNDIRECT) ---
+# --- MODULE 1: KẾT NỐI BIỂU ĐỒ (VNDIRECT - TRỰC TIẾP) ---
 @st.cache_data(ttl=900, show_spinner=False)
 def lay_du_lieu_bieu_do(ma):
     loi_chi_tiet = []
@@ -43,18 +44,19 @@ def lay_du_lieu_bieu_do(ma):
 
     return pd.DataFrame(), "Thất bại 🔴", " | ".join(loi_chi_tiet)
 
-# --- MODULE 2 (MỚI): KẾT NỐI HỒ SƠ DOANH NGHIỆP (TCBS - VNSTOCK CORE) ---
-# Dữ liệu tài chính chỉ cần cập nhật 1 lần/ngày (86400 giây) để tiết kiệm băng thông
+# --- MODULE 2 (FIXED): KẾT NỐI HỒ SƠ DOANH NGHIỆP QUA PROXY ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def lay_ho_so_doanh_nghiep(ma):
-    # Đây chính là đường dẫn API lõi mà vnstock sử dụng
-    url = f"https://apipubaws.tcbs.com.vn/tcanalysis/v1/ticker/{ma}/overview"
+    # Sử dụng Proxy AllOrigins để giấu IP đám mây, xuyên thủng tường lửa TCBS
+    url_tcbs = f"https://apipubaws.tcbs.com.vn/tcanalysis/v1/ticker/{ma}/overview"
+    url_proxy = f"https://api.allorigins.win/raw?url={urllib.parse.quote(url_tcbs)}"
+    
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': 'application/json'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     }
     try:
-        res = requests.get(url, headers=headers, timeout=5)
+        # Thời gian chờ 10s là dư sức vì file Hồ sơ doanh nghiệp rất nhẹ
+        res = requests.get(url_proxy, headers=headers, timeout=10)
         if res.status_code == 200:
             return res.json()
     except:
@@ -89,10 +91,10 @@ with tab1:
             st.error("Không thể lấy dữ liệu biểu đồ.")
             st.write(f"Chi tiết kỹ thuật: {loi}")
 
-# TAB 2 (MỚI KÍCH HOẠT): HỒ SƠ DOANH NGHIỆP
+# TAB 2: HỒ SƠ DOANH NGHIỆP
 with tab2:
     st.subheader(f"Báo cáo Tài chính Cơ bản - Mã: {ma_chon}")
-    with st.spinner("Đang trích xuất dữ liệu từ máy chủ TCBS..."):
+    with st.spinner("Đang định tuyến qua Proxy để lấy hồ sơ TCBS..."):
         profile = lay_ho_so_doanh_nghiep(ma_chon)
         if profile:
             # Hàng 1: Các chỉ số định giá
@@ -117,7 +119,7 @@ with tab2:
             st.write(f"- **Tổng cổ phiếu lưu hành:** `{profile.get('issueShare', 0):,.0f}`")
             st.write(f"- **Sàn niêm yết:** `{profile.get('exchange', 'N/A')}`")
         else:
-            st.warning("⚠️ Không thể tải hồ sơ doanh nghiệp. Tường lửa TCBS có thể đang tạm chặn IP.")
+            st.error("⚠️ Proxy quá tải hoặc tường lửa TCBS đã chặn đứng yêu cầu. Vui lòng thử lại sau vài phút.")
 
 # TAB 3: KHUYẾN NGHỊ RSI
 with tab3:
