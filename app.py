@@ -1,20 +1,26 @@
 import streamlit as st
 import pandas as pd
-from vnstock import *
+import yfinance as yf
 import plotly.graph_objects as go
+import time
 from datetime import datetime, timedelta
 
 # 1. CẤU HÌNH TRANG TỔNG QUAN
 st.set_page_config(page_title="Hệ thống Cảnh báo Chứng khoán Pro", layout="wide")
-st.title("📈 Hệ thống Phân tích Chứng khoán Pro (Dữ liệu Vnstock)")
+st.title("📈 Hệ thống Phân tích Chứng khoán Pro (Dữ liệu Quốc tế)")
 
 # 2. KHU VỰC ĐIỀU KHIỂN (SIDEBAR)
 st.sidebar.header("⚙️ Bảng Điều Khiển")
 DANH_SACH_MA = ["TCB", "ACV", "OIL", "PVC", "DRI", "CSM", "TNT"]
 ma_chon = st.sidebar.selectbox("Chọn mã cổ phiếu phân tích chuyên sâu:", DANH_SACH_MA)
 
-ngay_hom_nay = datetime.now().strftime('%Y-%m-%d')
-ngay_truoc_day = (datetime.now() - timedelta(days=180)).strftime('%Y-%m-%d')
+# Hàm định vị đuôi mã chuẩn Yahoo Finance
+def lay_ma_yf(ma):
+    if ma in ["TCB", "CSM", "TNT"]: return f"{ma}.HM"
+    elif ma in ["PVC", "OIL", "DRI"]: return f"{ma}.HN"
+    else: return f"{ma}.VN"
+
+ma_yf_chon = lay_ma_yf(ma_chon)
 
 # 3. CHIA GIAO DIỆN THÀNH 3 TAB
 tab1, tab2, tab3 = st.tabs(["📊 Biểu đồ Kỹ thuật", "🏢 Hồ sơ Doanh nghiệp", "💡 Khuyến nghị Tự động"])
@@ -23,41 +29,43 @@ tab1, tab2, tab3 = st.tabs(["📊 Biểu đồ Kỹ thuật", "🏢 Hồ sơ Doa
 with tab1:
     st.subheader(f"Biểu đồ biến động giá - Mã: {ma_chon}")
     try:
-        # Lấy dữ liệu từ Vnstock
-        df = stock_historical_data(symbol=ma_chon, start_date=ngay_truoc_day, end_date=ngay_hom_nay, resolution="1D", type="stock", source='TCBS')
+        stock = yf.Ticker(ma_yf_chon)
+        df = stock.history(period="6mo")
         
         if not df.empty:
-            # Vẽ biểu đồ nến chuyên nghiệp bằng Plotly
-            fig = go.Figure(data=[go.Candlestick(x=df['time'],
-                            open=df['open'],
-                            high=df['high'],
-                            low=df['low'],
-                            close=df['close'],
+            df.reset_index(inplace=True) # Reset để lấy cột Date vẽ biểu đồ
+            # Vẽ biểu đồ nến tương tác chuyên nghiệp bằng Plotly
+            fig = go.Figure(data=[go.Candlestick(x=df['Date'],
+                            open=df['Open'],
+                            high=df['High'],
+                            low=df['Low'],
+                            close=df['Close'],
                             name="Giá")])
             fig.update_layout(xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=30, b=0), height=500)
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.warning("Không có dữ liệu biểu đồ cho mã này.")
     except Exception as e:
-        st.error(f"Lỗi tải biểu đồ: Dữ liệu từ Vnstock đang tạm nghẽn trên máy chủ đám mây.")
+        st.error("Lỗi kết nối biểu đồ.")
 
 # ----------------- TAB 2: HỒ SƠ DOANH NGHIỆP -----------------
 with tab2:
     st.subheader(f"Chỉ số định giá Cơ bản - Mã: {ma_chon}")
     try:
-        # Sử dụng hàm lấy thông tin cơ bản của Vnstock
-        df_profile = ticker_overview(ma_chon)
-        if not df_profile.empty:
+        stock = yf.Ticker(ma_yf_chon)
+        info = stock.info
+        if info:
             col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Ngành nghề", df_profile['industryEn'].iloc[0][:15] + "...")
-            col2.metric("P/E (Định giá)", df_profile['pe'].iloc[0])
-            col3.metric("P/B (Giá/Sổ sách)", df_profile['pb'].iloc[0])
-            col4.metric("ROE (Lợi nhuận/Vốn)", df_profile['roe'].iloc[0])
-            
-            st.write("📌 **Tóm tắt hoạt động:**")
-            st.dataframe(df_profile[['shortName', 'volume', 'marketCap', 'issueShare']].style.format("{:,.0f}", subset=['volume', 'marketCap', 'issueShare']), use_container_width=True)
+            # Tự động trích xuất dữ liệu tài chính từ Yahoo
+            col1.metric("Ngành nghề", str(info.get('industry', 'Đang cập nhật'))[:20])
+            pe = info.get('trailingPE', 'N/A')
+            col2.metric("P/E (Định giá)", round(pe, 2) if isinstance(pe, (int, float)) else pe)
+            pb = info.get('priceToBook', 'N/A')
+            col3.metric("P/B (Giá/Sổ sách)", round(pb, 2) if isinstance(pb, (int, float)) else pb)
+            roe = info.get('returnOnEquity', 'N/A')
+            col4.metric("ROE (Biên LN)", f"{round(roe*100, 2)}%" if isinstance(roe, (int, float)) else roe)
     except Exception as e:
-        st.error("Không thể lấy dữ liệu cơ bản hiện tại.")
+        st.error("Hệ thống đang cập nhật hồ sơ doanh nghiệp này.")
 
 # ----------------- TAB 3: KHUYẾN NGHỊ TỰ ĐỘNG -----------------
 with tab3:
@@ -74,13 +82,16 @@ with tab3:
 
     if st.button("🚀 Quét dữ liệu tự động ngay bây giờ"):
         ket_qua = []
-        with st.spinner("Đang kết nối vào hệ thống Vnstock..."):
+        with st.spinner("Đang kết nối chậm rãi vào hệ thống toàn cầu để chống nghẽn..."):
             for ma in DANH_SACH_MA:
                 try:
-                    df_scan = stock_historical_data(symbol=ma, start_date=ngay_truoc_day, end_date=ngay_hom_nay, resolution="1D", type="stock", source='TCBS')
-                    if not df_scan.empty:
-                        df_scan['RSI'] = tinh_rsi(df_scan['close'])
-                        gia_hien_tai = df_scan['close'].iloc[-1]
+                    ma_yf = lay_ma_yf(ma)
+                    stock_scan = yf.Ticker(ma_yf)
+                    df_scan = stock_scan.history(period="6mo")
+                    
+                    if not df_scan.empty and 'Close' in df_scan.columns:
+                        df_scan['RSI'] = tinh_rsi(df_scan['Close'])
+                        gia_hien_tai = df_scan['Close'].iloc[-1]
                         rsi_hien_tai = df_scan['RSI'].iloc[-1]
                         
                         if rsi_hien_tai <= 30:
@@ -91,10 +102,13 @@ with tab3:
                             trang_thai = "🔵 Giữ"
                             
                         ket_qua.append({"Mã CP": ma, "Giá": f"{gia_hien_tai:,.0f}", "RSI": round(rsi_hien_tai, 2), "Khuyến nghị": trang_thai})
+                    
+                    # Cực kỳ quan trọng: Nghỉ 1.5 giây để tránh bị Yahoo khóa IP
+                    time.sleep(1.5)
                 except:
                     pass
         
         if ket_qua:
             st.dataframe(pd.DataFrame(ket_qua), use_container_width=True)
         else:
-            st.error("Hệ thống đám mây đang bị giới hạn truy cập API nội địa.")
+            st.error("Không lấy được dữ liệu, vui lòng chờ ít phút và thử lại.")
