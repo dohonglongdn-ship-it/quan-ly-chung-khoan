@@ -25,7 +25,13 @@ with st.spinner("Đang kết nối với trung tâm dữ liệu Yahoo Finance. V
     for ma in DANH_SACH_MA:
         try:
             # Yahoo Finance quy định mã VN phải có đuôi .VN
-            ma_yf = f"{ma}.VN"
+            # Phân loại đuôi mã chứng khoán theo đúng chuẩn Yahoo Finance
+            if ma in ["TCB", "CSM", "TNT"]:
+                ma_yf = f"{ma}.HM"
+            elif ma in ["PVC", "OIL", "DRI"]:
+                ma_yf = f"{ma}.HN"
+            else:
+                ma_yf = f"{ma}.VN"
             
             # Tải dữ liệu 6 tháng gần nhất cực nhanh
             stock = yf.Ticker(ma_yf)
