@@ -1,18 +1,17 @@
 import streamlit as st
 import pandas as pd
 from vnstock import *
-import pandas_ta as ta
+import ta  # Đã đổi sang thư viện tính toán hiện đại hơn
 from datetime import datetime, timedelta
 
 st.set_page_config(page_title="Hệ thống Cảnh báo Chứng khoán", layout="wide")
 st.title("📈 Hệ thống Theo dõi & Khuyến cáo Chứng khoán Việt Nam")
 st.write("Ứng dụng tự động phân tích kỹ thuật dựa trên chỉ báo RSI")
 
-# Danh sách mã cổ phiếu theo dõi
 DANH_SACH_MA = ["TCB", "ACV", "OIL", "PVC", "DRI", "CSM", "TNT"]
 ket_qua = []
 
-# Tự động tính toán ngày để lấy dữ liệu 6 tháng gần nhất
+# Lấy dữ liệu 6 tháng gần nhất
 ngay_hom_nay = datetime.now().strftime('%Y-%m-%d')
 ngay_truoc_day = (datetime.now() - timedelta(days=180)).strftime('%Y-%m-%d')
 
@@ -21,7 +20,8 @@ for ma in DANH_SACH_MA:
         df = stock_historical_data(symbol=ma, start_date=ngay_truoc_day, end_date=ngay_hom_nay, resolution="1D", type="stock")
         
         if df is not None and not df.empty:
-            df['RSI'] = ta.rsi(df['close'], length=14)
+            # Lệnh tính RSI của thư viện mới
+            df['RSI'] = ta.momentum.rsi(df['close'], window=14)
             
             gia_hien_tai = df['close'].iloc[-1]
             rsi_hien_tai = df['RSI'].iloc[-1]
