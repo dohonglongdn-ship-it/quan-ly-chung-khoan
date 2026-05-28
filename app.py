@@ -3,7 +3,8 @@ import pandas as pd
 import requests
 import plotly.graph_objects as go
 import time
-import urllib.parse # Thư viện bắt buộc để mã hóa link Proxy
+import urllib.parse
+import json
 from datetime import datetime, timedelta
 
 # 1. CẤU HÌNH TRANG
@@ -44,23 +45,61 @@ def lay_du_lieu_bieu_do(ma):
 
     return pd.DataFrame(), "Thất bại 🔴", " | ".join(loi_chi_tiet)
 
-# --- MODULE 2 (FIXED): KẾT NỐI HỒ SƠ DOANH NGHIỆP QUA PROXY ---
+# --- MODULE 2 (TỐI ƯU): KẾT NỐI HỒ SƠ DOANH NGHIỆP 3 LỚP DỰ PHÒNG ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def lay_ho_so_doanh_nghiep(ma):
-    # Sử dụng Proxy AllOrigins để giấu IP đám mây, xuyên thủng tường lửa TCBS
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
     url_tcbs = f"https://apipubaws.tcbs.com.vn/tcanalysis/v1/ticker/{ma}/overview"
-    url_proxy = f"https://api.allorigins.win/raw?url={urllib.parse.quote(url_tcbs)}"
-    
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-    }
+
+    # LỚP 1: TCBS qua Proxy AllOrigins (Chế độ GET bọc JSON an toàn)
     try:
-        # Thời gian chờ 10s là dư sức vì file Hồ sơ doanh nghiệp rất nhẹ
-        res = requests.get(url_proxy, headers=headers, timeout=10)
+        url_proxy1 = f"https://api.allorigins.win/get?url={urllib.parse.quote(url_tcbs)}"
+        res = requests.get(url_proxy1, headers=headers, timeout=8)
         if res.status_code == 200:
-            return res.json()
+            wrapper = res.json()
+            # Bắt buộc TCBS phải trả về mã 200 thật, chống lỗi đọc HTML của tường lửa
+            if wrapper.get('status', {}).get('http_code') == 200:
+                data = json.loads(wrapper['contents'])
+                if isinstance(data, dict) and 'pe' in data and 'industry' in data:
+                    data['nguon_cap'] = 'TCBS (Proxy AllOrigins)'
+                    return data
     except:
         pass
+        
+    # LỚP 2: TCBS qua Proxy CodeTabs (Dự phòng ngắt kết nối)
+    try:
+        url_proxy2 = f"https://api.codetabs.com/v1/proxy?quest={urllib.parse.quote(url_tcbs)}"
+        res = requests.get(url_proxy2, headers=headers, timeout=8)
+        if res.status_code == 200:
+            data = res.json()
+            if isinstance(data, dict) and 'pe' in data and 'industry' in data:
+                data['nguon_cap'] = 'TCBS (Proxy CodeTabs)'
+                return data
+    except:
+        pass
+
+    # LỚP 3: Cổng SSI FiinTrade (Cực kỳ mở và hiếm khi chặn Cloud)
+    try:
+        url_ssi = f"https://fiin-fundamental.ssi.com.vn/StockInfor/StockOverview/{ma}"
+        res = requests.get(url_ssi, headers=headers, timeout=5)
+        if res.status_code == 200:
+            item = res.json()
+            item = item.get('item', item) if isinstance(item, dict) else item
+            if isinstance(item, dict) and ('priceToEarning' in item or 'pe' in item):
+                return {
+                    'industry': item.get('icbName', 'N/A'),
+                    'pe': item.get('priceToEarning', item.get('pe', 'N/A')),
+                    'pb': item.get('priceToBook', item.get('pb', 'N/A')),
+                    'roe': item.get('roe', 'N/A'),
+                    'marketCap': item.get('marketCap', 0),
+                    'volume': item.get('matchedVolume', 0),
+                    'issueShare': item.get('outstandingShare', 0),
+                    'exchange': item.get('comGroupCode', 'N/A'),
+                    'nguon_cap': 'SSI FiinTrade'
+                }
+    except:
+        pass
+
     return None
 
 # --- HÀM TÍNH RSI ---
@@ -94,9 +133,11 @@ with tab1:
 # TAB 2: HỒ SƠ DOANH NGHIỆP
 with tab2:
     st.subheader(f"Báo cáo Tài chính Cơ bản - Mã: {ma_chon}")
-    with st.spinner("Đang định tuyến qua Proxy để lấy hồ sơ TCBS..."):
+    with st.spinner("Đang chạy 3 lớp dự phòng để trích xuất dữ liệu tài chính..."):
         profile = lay_ho_so_doanh_nghiep(ma_chon)
         if profile:
+            st.caption(f"Nguồn cấp dữ liệu: **{profile.get('nguon_cap', 'Không xác định')}**")
+            
             # Hàng 1: Các chỉ số định giá
             col1, col2, col3, col4 = st.columns(4)
             col1.metric("Ngành nghề", str(profile.get('industry', 'N/A')))
@@ -107,8 +148,13 @@ with tab2:
             pb = profile.get('pb')
             col3.metric("P/B (Giá/Sổ sách)", f"{pb:.2f}" if isinstance(pb, (int, float)) else "N/A")
             
+            # Xử lý định dạng phần trăm cho ROE
             roe = profile.get('roe')
-            col4.metric("ROE (Biên LN)", f"{roe*100:.2f}%" if isinstance(roe, (int, float)) else "N/A")
+            if isinstance(roe, (int, float)):
+                roe_str = f"{roe*100:.2f}%" if roe < 1 else f"{roe:.2f}%"
+            else:
+                roe_str = "N/A"
+            col4.metric("ROE (Biên LN)", roe_str)
 
             # Hàng 2: Thông tin quy mô
             st.markdown("---")
@@ -119,7 +165,7 @@ with tab2:
             st.write(f"- **Tổng cổ phiếu lưu hành:** `{profile.get('issueShare', 0):,.0f}`")
             st.write(f"- **Sàn niêm yết:** `{profile.get('exchange', 'N/A')}`")
         else:
-            st.error("⚠️ Proxy quá tải hoặc tường lửa TCBS đã chặn đứng yêu cầu. Vui lòng thử lại sau vài phút.")
+            st.error("⚠️ Toàn bộ 3 lớp dự phòng đều quá tải hoặc bị chặn. Vui lòng thử lại sau vài phút.")
 
 # TAB 3: KHUYẾN NGHỊ RSI
 with tab3:
