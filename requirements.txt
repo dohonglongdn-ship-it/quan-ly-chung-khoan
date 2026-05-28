@@ -1,4 +1,4 @@
 streamlit
-pandas
-vnstock
+pandas==2.2.2
+vnstock==0.2.8.5
 ta
