@@ -14,13 +14,8 @@ st.sidebar.header("⚙️ Bảng Điều Khiển")
 DANH_SACH_MA = ["TCB", "ACV", "OIL", "PVC", "DRI", "CSM", "TNT"]
 ma_chon = st.sidebar.selectbox("Chọn mã cổ phiếu phân tích chuyên sâu:", DANH_SACH_MA)
 
-# Hàm định vị đuôi mã chuẩn Yahoo Finance
-def lay_ma_yf(ma):
-    if ma in ["TCB", "CSM", "TNT"]: return f"{ma}.HM"
-    elif ma in ["PVC", "OIL", "DRI"]: return f"{ma}.HN"
-    else: return f"{ma}.VN"
-
-ma_yf_chon = lay_ma_yf(ma_chon)
+# Cực kỳ quan trọng: Yahoo Finance dùng đuôi .VN cho mọi mã tại Việt Nam
+ma_yf_chon = f"{ma_chon}.VN"
 
 # 3. CHIA GIAO DIỆN THÀNH 3 TAB
 tab1, tab2, tab3 = st.tabs(["📊 Biểu đồ Kỹ thuật", "🏢 Hồ sơ Doanh nghiệp", "💡 Khuyến nghị Tự động"])
@@ -33,9 +28,8 @@ with tab1:
         df = stock.history(period="6mo")
         
         if not df.empty:
-            df.reset_index(inplace=True) # Reset để lấy cột Date vẽ biểu đồ
-            # Vẽ biểu đồ nến tương tác chuyên nghiệp bằng Plotly
-            fig = go.Figure(data=[go.Candlestick(x=df['Date'],
+            # Giải pháp chống lỗi KeyError: Lấy trực tiếp trục thời gian (df.index)
+            fig = go.Figure(data=[go.Candlestick(x=df.index,
                             open=df['Open'],
                             high=df['High'],
                             low=df['Low'],
@@ -44,9 +38,10 @@ with tab1:
             fig.update_layout(xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=30, b=0), height=500)
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.warning("Không có dữ liệu biểu đồ cho mã này.")
+            st.warning("Yahoo Finance tạm thời không có dữ liệu biểu đồ cho mã này.")
     except Exception as e:
-        st.error("Lỗi kết nối biểu đồ.")
+        # In thẳng lỗi ra màn hình để nếu còn nghẽn mạng ta sẽ biết ngay
+        st.error(f"Hệ thống đang bảo trì: {str(e)}")
 
 # ----------------- TAB 2: HỒ SƠ DOANH NGHIỆP -----------------
 with tab2:
@@ -54,9 +49,8 @@ with tab2:
     try:
         stock = yf.Ticker(ma_yf_chon)
         info = stock.info
-        if info:
+        if info and 'trailingPE' in info:
             col1, col2, col3, col4 = st.columns(4)
-            # Tự động trích xuất dữ liệu tài chính từ Yahoo
             col1.metric("Ngành nghề", str(info.get('industry', 'Đang cập nhật'))[:20])
             pe = info.get('trailingPE', 'N/A')
             col2.metric("P/E (Định giá)", round(pe, 2) if isinstance(pe, (int, float)) else pe)
@@ -64,8 +58,10 @@ with tab2:
             col3.metric("P/B (Giá/Sổ sách)", round(pb, 2) if isinstance(pb, (int, float)) else pb)
             roe = info.get('returnOnEquity', 'N/A')
             col4.metric("ROE (Biên LN)", f"{round(roe*100, 2)}%" if isinstance(roe, (int, float)) else roe)
+        else:
+            st.info("Hồ sơ tài chính của mã này đang được cập nhật.")
     except Exception as e:
-        st.error("Hệ thống đang cập nhật hồ sơ doanh nghiệp này.")
+        st.error("Không thể kết nối để lấy hồ sơ doanh nghiệp.")
 
 # ----------------- TAB 3: KHUYẾN NGHỊ TỰ ĐỘNG -----------------
 with tab3:
@@ -85,7 +81,7 @@ with tab3:
         with st.spinner("Đang kết nối chậm rãi vào hệ thống toàn cầu để chống nghẽn..."):
             for ma in DANH_SACH_MA:
                 try:
-                    ma_yf = lay_ma_yf(ma)
+                    ma_yf = f"{ma}.VN"
                     stock_scan = yf.Ticker(ma_yf)
                     df_scan = stock_scan.history(period="6mo")
                     
@@ -103,8 +99,7 @@ with tab3:
                             
                         ket_qua.append({"Mã CP": ma, "Giá": f"{gia_hien_tai:,.0f}", "RSI": round(rsi_hien_tai, 2), "Khuyến nghị": trang_thai})
                     
-                    # Cực kỳ quan trọng: Nghỉ 1.5 giây để tránh bị Yahoo khóa IP
-                    time.sleep(1.5)
+                    time.sleep(1) # Nghỉ để chống bị chặn IP
                 except:
                     pass
         
