@@ -2,13 +2,14 @@ import streamlit as st
 import pandas as pd
 import requests
 import plotly.graph_objects as go
+import plotly.express as px # THƯ VIỆN MỚI: VẼ BIỂU ĐỒ BÁNH DANH MỤC
 from plotly.subplots import make_subplots
 import time
 from datetime import datetime, timedelta
 
 # 1. CẤU HÌNH TRANG
 st.set_page_config(page_title="Hệ thống Cảnh báo Chứng khoán Pro", layout="wide")
-st.title("📈 Hệ thống Phân tích Chứng khoán Pro (Giai đoạn 3: Smart Screener)")
+st.title("📈 Hệ thống Phân tích & Quản trị Chứng khoán Pro")
 
 # 2. KHU VỰC ĐIỀU KHIỂN
 st.sidebar.header("⚙️ Bảng Điều Khiển")
@@ -17,13 +18,13 @@ ma_chon = st.sidebar.selectbox("Chọn mã cổ phiếu phân tích chuyên sâu
 
 # --- CƠ SỞ DỮ LIỆU NỘI BỘ (LOCAL DATA LAKE) ---
 LOCAL_DB = {
-    "ACV": {"industry": "Vận tải Hàng không", "exchange": "UPCOM", "issueShare": 2177173236, "eps": 4850, "bvps": 23500, "roe": 0.18},
-    "OIL": {"industry": "Bán lẻ Xăng dầu", "exchange": "UPCOM", "issueShare": 1034229500, "eps": 750, "bvps": 11200, "roe": 0.06},
-    "PVC": {"industry": "Hóa chất Dầu khí", "exchange": "HNX", "issueShare": 50000000, "eps": 550, "bvps": 11800, "roe": 0.04},
-    "DRI": {"industry": "Cao su công nghiệp", "exchange": "UPCOM", "issueShare": 73200000, "eps": 950, "bvps": 12500, "roe": 0.08},
-    "CSM": {"industry": "Săm lốp & Phụ tùng", "exchange": "HOSE", "issueShare": 133637422, "eps": 420, "bvps": 14500, "roe": 0.03},
-    "TNT": {"industry": "Bất động sản", "exchange": "HOSE", "issueShare": 51000000, "eps": 150, "bvps": 10200, "roe": 0.01},
-    "TCB": {"industry": "Ngân hàng", "exchange": "HOSE", "issueShare": 7086240000, "eps": 3690, "bvps": 24000, "roe": 0.15}
+    "ACV": {"name": "Tổng công ty Cảng hàng không VN", "industry": "Vận tải Hàng không", "exchange": "UPCOM", "issueShare": 2177173236, "eps": 4850, "bvps": 23500, "roe": 0.18},
+    "OIL": {"name": "Tổng công ty Dầu Việt Nam", "industry": "Bán lẻ Xăng dầu", "exchange": "UPCOM", "issueShare": 1034229500, "eps": 750, "bvps": 11200, "roe": 0.06},
+    "PVC": {"name": "Tổng công ty Hóa chất Dầu khí", "industry": "Hóa chất Dầu khí", "exchange": "HNX", "issueShare": 50000000, "eps": 550, "bvps": 11800, "roe": 0.04},
+    "DRI": {"name": "Công ty cổ phần Cao su Đắk Lắk", "industry": "Cao su công nghiệp", "exchange": "UPCOM", "issueShare": 73200000, "eps": 950, "bvps": 12500, "roe": 0.08},
+    "CSM": {"name": "Công ty Công nghiệp Cao su Miền Nam", "industry": "Săm lốp & Phụ tùng", "exchange": "HOSE", "issueShare": 133637422, "eps": 420, "bvps": 14500, "roe": 0.03},
+    "TNT": {"name": "Công ty Tài nguyên và Tài chính Việt Nam", "industry": "Bất động sản", "exchange": "HOSE", "issueShare": 51000000, "eps": 150, "bvps": 10200, "roe": 0.01},
+    "TCB": {"name": "Ngân hàng Kỹ thương Việt Nam", "industry": "Ngân hàng", "exchange": "HOSE", "issueShare": 7086240000, "eps": 3690, "bvps": 24000, "roe": 0.15}
 }
 
 # --- MODULE 1: KẾT NỐI BIỂU ĐỒ LIVE ---
@@ -58,7 +59,6 @@ def lay_ho_so_doanh_nghiep(ma):
         'exchange': 'N/A', 'issueShare': 0, 'marketCap': 0, 'eps': 0, 'bvps': 0,
         'nguon_cap': 'Đang kết nối...'
     }
-    
     try:
         url_tv = "https://scanner.tradingview.com/vietnam/scan"
         payload = {"symbols": {"tickers": [f"HOSE:{ma}", f"HNX:{ma}", f"UPCOM:{ma}"]},
@@ -120,10 +120,10 @@ def format_metric(val, is_pct=False):
     except:
         return "N/A"
 
-# 3. GIAO DIỆN CHÍNH (3 TABS)
-tab1, tab2, tab3 = st.tabs(["📊 Biểu đồ Kỹ thuật", "🏢 Hồ sơ Doanh nghiệp", "📡 Radar Dòng tiền (Screener)"])
+# 3. GIAO DIỆN CHÍNH (4 TABS)
+tab1, tab2, tab3, tab4 = st.tabs(["📊 Biểu đồ Kỹ thuật", "🏢 Hồ sơ Doanh nghiệp", "📡 Radar Dòng tiền (Screener)", "💼 Quản lý Danh mục"])
 
-# --- TAB 1: BIỂU ĐỒ ---
+# --- TAB 1: BIỂU ĐỒ & XUẤT DỮ LIỆU ---
 with tab1:
     st.subheader(f"Trung tâm Phân tích Kỹ thuật - Mã: {ma_chon}")
     col_t1, col_t2, col_t3, col_t4 = st.columns(4)
@@ -158,8 +158,12 @@ with tab1:
                 vol_colors = ['#26A69A' if row['Close'] >= row['Open'] else '#EF5350' for index, row in df.iterrows()]
                 fig.add_trace(go.Bar(x=df['Date'], y=df['Volume'], name='Volume', marker_color=vol_colors), row=2, col=1)
 
-            fig.update_layout(xaxis_rangeslider_visible=False, xaxis2_rangeslider_visible=False, margin=dict(l=20, r=20, t=40, b=20), height=650, showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+            fig.update_layout(xaxis_rangeslider_visible=False, xaxis2_rangeslider_visible=False, margin=dict(l=20, r=20, t=40, b=20), height=600, showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
             st.plotly_chart(fig, use_container_width=True)
+            
+            # TÍNH NĂNG GIAI ĐOẠN 4: XUẤT LỊCH SỬ GIÁ SANG CSV
+            csv_price = df.to_csv(index=False).encode('utf-8')
+            st.download_button(label="📥 Xuất lịch sử giá 180 phiên (CSV)", data=csv_price, file_name=f"lich_su_gia_{ma_chon}.csv", mime="text/csv")
         else:
             st.error("Không thể lấy dữ liệu biểu đồ.")
 
@@ -192,23 +196,22 @@ with tab2:
 
         st.markdown("---")
         st.write("📌 **Quy mô doanh nghiệp & Giao dịch:**")
+        st.write(f"- **Tên doanh nghiệp:** `{LOCAL_DB.get(ma_chon, {}).get('name', 'N/A')}`")
         st.write(f"- **Thị giá hiện tại:** `{gia_hien_tai:,.0f}` VNĐ")
         st.write(f"- **Vốn hóa thị trường:** `{von_hoa_ty:,.0f}` tỷ VNĐ")
         st.write(f"- **KLGD trung bình (20 phiên):** `{klgd_20:,.0f}` cổ phiếu")
         st.write(f"- **Tổng cổ phiếu lưu hành:** `{profile.get('issueShare', 0):,.0f}`")
         st.write(f"- **Sàn niêm yết:** `{profile.get('exchange', 'N/A')}`")
 
-# --- TAB 3: RADAR DÒNG TIỀN ĐA BIẾN ---
+# --- TAB 3: RADAR DÒNG TIỀN VÀ XUẤT BÁO CÁO ---
 with tab3:
     st.subheader("Radar Quét Khối lượng & Tín hiệu Đa biến")
-    st.markdown("Hệ thống tự động chấm điểm sức mạnh cổ phiếu dựa trên **RSI**, **MACD**, **MA Crossover** và phát hiện dòng tiền lớn nhập cuộc.")
     
     if st.button("🚀 Kích hoạt Radar Quét Toàn Thị Trường"):
         ket_qua = []
-        with st.spinner("Đang cho Robot phân tích Tín hiệu và Đột biến khối lượng..."):
+        with st.spinner("Đang phân tích tín hiệu dòng tiền..."):
             for ma in DANH_SACH_MA:
                 df_scan, _, _ = lay_du_lieu_bieu_do(ma)
-                
                 if not df_scan.empty and len(df_scan) >= 50:
                     df_scan['RSI'] = tinh_rsi(df_scan['Close'])
                     df_scan['MA20'] = df_scan['Close'].rolling(window=20).mean()
@@ -248,23 +251,111 @@ with tab3:
                         diem_mua += 1
                         dot_bien = "⭐ NỔ VOL DÒNG TIỀN"
                         
-                    if diem_mua >= 3:
-                        khuyen_nghi = "🟢 MUA MẠNH"
-                    elif diem_mua >= 1:
-                        khuyen_nghi = "🟡 NẮM GIỮ / THEO DÕI"
-                    else:
-                        khuyen_nghi = "🔴 RỦI RO / BÁN"
+                    if diem_mua >= 3: khuyen_nghi = "🟢 MUA MẠNH"
+                    elif diem_mua >= 1: khuyen_nghi = "🟡 NẮM GIỮ"
+                    else: khuyen_nghi = "🔴 RỦI RO / BÁN"
                         
-                    ket_qua.append({
-                        "Mã CP": ma, 
-                        "Giá": f"{gia:,.0f}", 
-                        "RSI": round(rsi, 2), 
-                        "Dòng tiền": dot_bien,
-                        "Hội tụ Kỹ thuật": ", ".join(tin_hieu) if tin_hieu else "Phân kỳ/Suy yếu",
-                        "Hành động": khuyen_nghi
-                    })
-                time.sleep(0.3) 
+                    ket_qua.append({"Mã CP": ma, "Giá": gia, "RSI": round(rsi, 2), "Dòng tiền": dot_bien, "Hội tụ Kỹ thuật": ", ".join(tin_hieu) if tin_hieu else "Suy yếu", "Hành động": khuyen_nghi})
+                time.sleep(0.1) 
         
         if ket_qua:
             df_kq = pd.DataFrame(ket_qua)
             st.dataframe(df_kq, use_container_width=True, hide_index=True)
+            
+            # TÍNH NĂNG GIAI ĐOẠN 4: XUẤT BẢNG BÁO CÁO RADAR SANG CSV
+            csv_radar = df_kq.to_csv(index=False).encode('utf-8')
+            st.download_button(label="📥 Xuất báo cáo Radar Dòng tiền (CSV)", data=csv_radar, file_name="bao_cao_radar_live.csv", mime="text/csv")
+
+# --- TAB 4 (MỚI KÍCH HOẠT): QUẢN LÝ DANH MỤC ĐẦU TƯ ---
+with tab4:
+    st.subheader("💼 Hệ thống Quản trị Tài sản ròng & Tỷ trọng vốn")
+    st.markdown("Thay đổi **Số lượng** và **Giá mua** dưới đây để hệ thống tự động định giá lại tài sản theo thời gian thực.")
+
+    # Tạo bảng nhập liệu động cho 7 mã
+    danh_sach_nhap = []
+    
+    col_h1, col_h2, col_h3 = st.columns([2, 3, 3])
+    col_h1.write("**Mã CP**")
+    col_h2.write("**Số lượng nắm giữ (Cổ phiếu)**")
+    col_h3.write("**Giá mua trung bình (VNĐ)**")
+    
+    # Thiết lập form nhập liệu nhanh với các mốc mặc định ban đầu
+    defaults = {"TCB": (1000, 32000), "ACV": (500, 43000), "OIL": (2000, 14000), "PVC": (0, 0), "DRI": (0, 0), "CSM": (0, 0), "TNT": (0, 0)}
+    
+    for ma in DANH_SACH_MA:
+        c1, c2, c3 = st.columns([2, 3, 3])
+        c1.write(f"### {ma}")
+        sl = c2.number_input(f"Số lượng {ma}", min_value=0, step=100, value=defaults[ma][0], label_visibility="collapsed")
+        gia_v = c3.number_input(f"Giá vốn {ma}", min_value=0, step=500, value=defaults[ma][1], label_visibility="collapsed")
+        if sl > 0:
+            danh_sach_nhap.append({"Mã CP": ma, "Số lượng": sl, "Giá vốn": gia_v})
+
+    # Tính toán hiệu năng danh mục
+    if danh_sach_nhap:
+        st.markdown("---")
+        st.write("### 📊 Hiệu suất Danh mục đầu tư thực tế")
+        
+        hang_danh_muc = []
+        tong_von = 0
+        tong_gia_tri_hien_tai = 0
+        
+        for item in danh_sach_nhap:
+            ma = item["Mã CP"]
+            sl = item["Số lượng"]
+            gia_v = item["Giá vốn"]
+            
+            # Lấy giá live từ VNDirect
+            df_live, _, _ = lay_du_lieu_bieu_do(ma)
+            gia_live = df_live['Close'].iloc[-1] if not df_live.empty else gia_v
+            
+            thanh_tien_von = sl * gia_v
+            thanh_tien_live = sl * gia_live
+            loi_nhuan = thanh_tien_live - thanh_tien_von
+            phan_tram_lh = (loi_nhuan / thanh_tien_von * 100) if thanh_tien_von > 0 else 0
+            
+            tong_von += thanh_tien_von
+            tong_gia_tri_hien_tai += thanh_tien_live
+            
+            hang_danh_muc.append({
+                "Mã CP": ma,
+                "Số lượng": f"{sl:,}",
+                "Giá mua": f"{gia_v:,.0f}",
+                "Giá hiện tại": f"{gia_live:,.0f}",
+                "Tổng vốn đầu tư": thanh_tien_von,
+                "Giá trị hiện tại": thanh_tien_live,
+                "Lời / Lỗ (VNĐ)": loi_nhuan,
+                "Hiệu suất": f"{phan_tram_lh:.2f}%"
+            })
+            
+        df_portfolio = pd.DataFrame(hang_danh_muc)
+        
+        # Hiển thị các chỉ số tổng quan ở phía trên
+        tong_loi_nhuan = tong_gia_tri_hien_tai - tong_von
+        pct_tong = (tong_loi_nhuan / tong_von * 100) if tong_von > 0 else 0
+        
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Tổng vốn đầu tư", f"{tong_von:,.0f} VNĐ")
+        m2.metric("Tổng giá trị tài sản (NAV)", f"{tong_gia_tri_hien_tai:,.0f} VNĐ")
+        
+        # Đổi màu xanh đỏ cho tổng lời lỗ
+        m3.metric("Tổng Lời / Lỗ", f"{tong_loi_nhuan:,.0f} VNĐ ({pct_tong:.2f}%)", 
+                  delta=f"{tong_loi_nhuan:,.0f} VNĐ" if tong_loi_nhuan >= 0 else f"{tong_loi_nhuan:,.0f} VNĐ")
+        
+        # Hiển thị bảng chi tiết tài sản
+        df_hien_thi = df_portfolio.copy()
+        df_hien_thi["Tổng vốn đầu tư"] = df_hien_thi["Tổng vốn đầu tư"].map("{:,.0f}".format)
+        df_hien_thi["Giá trị hiện tại"] = df_hien_thi["Giá trị hiện tại"].map("{:,.0f}".format)
+        df_hien_thi["Lời / Lỗ (VNĐ)"] = df_hien_thi["Lời / Lỗ (VNĐ)"].map("{:,.0f}".format)
+        
+        st.dataframe(df_hien_thi, use_container_width=True, hide_index=True)
+        
+        # Vẽ biểu đồ cơ cấu tỷ trọng vốn bằng Plotly Express
+        st.markdown("---")
+        st.write("### 🍕 Biểu đồ Phân bổ tỷ trọng nguồn vốn")
+        fig_pie = px.pie(df_portfolio, values='Giá trị hiện tại', names='Mã CP', 
+                         hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
+        fig_pie.update_layout(margin=dict(l=20, r=20, t=20, b=20), height=400)
+        st.plotly_chart(fig_pie, use_container_width=True)
+        
+    else:
+        st.info("💡 Điền số lượng nắm giữ lớn hơn 0 để kích hoạt bảng tính toán hiệu suất danh mục.")
