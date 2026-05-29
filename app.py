@@ -9,12 +9,23 @@ import os
 import json 
 from datetime import datetime, timedelta
 
-# CẤU HÌNH
-st.set_page_config(page_title="Pro Terminal", layout="wide")
-st.title("📈 Pro Terminal: Phân tích & Quản trị")
+# 1. CẤU HÌNH TRANG
+st.set_page_config(page_title="Hệ thống Phân tích & Quản trị Chứng khoán Pro", layout="wide")
+st.title("📈 Hệ thống Phân tích & Quản trị Chứng khoán Pro (Institutional Terminal)")
 
-# DATABASE
+# --- DỮ LIỆU CỐT LÕI ---
+LOCAL_DB = {
+    "ACV": {"name": "Tổng công ty Cảng hàng không VN", "industry": "Vận tải Hàng không", "exchange": "UPCOM", "issueShare": 2177173236, "eps": 4850, "bvps": 23500, "roe": 0.18},
+    "OIL": {"name": "Tổng công ty Dầu Việt Nam", "industry": "Bán lẻ Xăng dầu", "exchange": "UPCOM", "issueShare": 1034229500, "eps": 750, "bvps": 11200, "roe": 0.06},
+    "PVC": {"name": "Tổng công ty Hóa chất Dầu khí", "industry": "Hóa chất Dầu khí", "exchange": "HNX", "issueShare": 50000000, "eps": 550, "bvps": 11800, "roe": 0.04},
+    "DRI": {"name": "Công ty cổ phần Cao su Đắk Lắk", "industry": "Cao su công nghiệp", "exchange": "UPCOM", "issueShare": 73200000, "eps": 950, "bvps": 12500, "roe": 0.08},
+    "CSM": {"name": "Công ty Công nghiệp Cao su Miền Nam", "industry": "Săm lốp & Phụ tùng", "exchange": "HOSE", "issueShare": 133637422, "eps": 420, "bvps": 14500, "roe": 0.03},
+    "TNT": {"name": "Công ty Tài nguyên và Tài chính Việt Nam", "industry": "Bất động sản", "exchange": "HOSE", "issueShare": 51000000, "eps": 150, "bvps": 10200, "roe": 0.01},
+    "TCB": {"name": "Ngân hàng Kỹ thương Việt Nam", "industry": "Ngân hàng", "exchange": "HOSE", "issueShare": 7086240000, "eps": 3690, "bvps": 24000, "roe": 0.15}
+}
+
 FILE_BO_NHU = "portfolio_storage.json"
+
 def tai_danh_muc():
     mac_dinh = {"TCB": [1000, 32000], "ACV": [500, 43000], "OIL": [2000, 14000]}
     if os.path.exists(FILE_BO_NHU):
@@ -29,11 +40,7 @@ def luu_danh_muc(du_lieu):
 DANH_MỤC_LIVE = tai_danh_muc()
 DANH_SACH_MA = list(DANH_MỤC_LIVE.keys())
 
-# SIDEBAR
-st.sidebar.header("🔍 Phân tích")
-ma_chon = st.sidebar.selectbox("Chọn mã:", [""] + DANH_SACH_MA)
-
-# MODULES
+# --- MODULES DỮ LIỆU ---
 @st.cache_data(ttl=900)
 def get_data(ma):
     if not ma: return pd.DataFrame()
@@ -49,19 +56,24 @@ def get_data(ma):
             return df
     return pd.DataFrame()
 
-# TABS
+@st.cache_data(ttl=86400)
+def get_profile(ma):
+    if ma in LOCAL_DB: return LOCAL_DB[ma]
+    return {'name': ma, 'industry': 'N/A', 'exchange': 'N/A', 'issueShare': 0}
+
+# --- GIAO DIỆN ---
 tab0, tab1, tab2, tab3 = st.tabs(["🖥️ Bảng giá", "📊 Biểu đồ", "🏢 Hồ sơ", "🤖 AI Advisor"])
 
 with tab0:
-    st.subheader("Bảng Giá")
-    with st.expander("Quản lý mã"):
-        m_moi = st.text_input("Thêm mã").upper()
-        if st.button("Thêm"):
-            if m_moi and m_moi not in DANH_MỤC_LIVE: DANH_MỤC_LIVE[m_moi] = [0, 0]; luu_danh_muc(DANH_MỤC_LIVE); st.rerun()
-    
-    st.write("Danh mục:", DANH_SACH_MA)
+    st.subheader("Watchlist")
+    col1, col2 = st.columns([3, 1])
+    m_moi = col1.text_input("Thêm mã mới").upper()
+    if col2.button("Thêm mã"):
+        if m_moi and m_moi not in DANH_MỤC_LIVE: DANH_MỤC_LIVE[m_moi] = [0, 0]; luu_danh_muc(DANH_MỤC_LIVE); st.rerun()
+    st.write(DANH_SACH_MA)
 
 with tab1:
+    ma_chon = st.selectbox("Chọn mã để xem biểu đồ:", [""] + DANH_SACH_MA)
     if ma_chon:
         df = get_data(ma_chon)
         if not df.empty:
@@ -70,8 +82,14 @@ with tab1:
 
 with tab2:
     if ma_chon:
-        st.write("Thông tin hồ sơ tại đây...")
+        p = get_profile(ma_chon)
+        st.write("Thông tin cơ bản:", p)
 
 with tab3:
-    st.subheader("Trợ lý AI")
-    st.info("Hệ thống đang sẵn sàng.")
+    st.info("Hệ thống phân tích AI đang chạy ổn định.")
+"""
+
+with open("app.py", "w", encoding="utf-8") as f:
+    f.write(app_code)
+
+print("File app.py successfully saved.")}
