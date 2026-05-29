@@ -11,475 +11,83 @@ import xml.etree.ElementTree as ET
 import urllib.parse
 from datetime import datetime, timedelta
 
-# ==========================================
-# 1. CẤU HÌNH HỆ THỐNG & GIAO DIỆN
-# ==========================================
-st.set_page_config(page_title="Hệ thống Phân tích & Quản trị Chứng khoán Pro", layout="wide")
+# 1. CẤU HÌNH TRANG
+st.set_page_config(page_title="Pro Terminal", layout="wide")
 st.title("📈 Hệ thống Phân tích & Quản trị Chứng khoán Pro (Institutional Terminal)")
 
-# CƠ SỞ DỮ LIỆU NỘI BỘ VỀ DOANH NGHIỆP (DATA LAKE)
-LOCAL_DB = {
-    "ACV": {"name": "Tổng công ty Cảng hàng không VN", "industry": "Vận tải Hàng không", "exchange": "UPCOM", "issueShare": 2177173236, "eps": 4850, "bvps": 23500, "roe": 0.18},
-    "OIL": {"name": "Tổng công ty Dầu Việt Nam", "industry": "Bán lẻ Xăng dầu", "exchange": "UPCOM", "issueShare": 1034229500, "eps": 750, "bvps": 11200, "roe": 0.06},
-    "PVC": {"name": "Tổng công ty Hóa chất Dầu khí", "industry": "Hóa chất Dầu khí", "exchange": "HNX", "issueShare": 50000000, "eps": 550, "bvps": 11800, "roe": 0.04},
-    "DRI": {"name": "Công ty cổ phần Cao su Đắk Lắk", "industry": "Cao su công nghiệp", "exchange": "UPCOM", "issueShare": 73200000, "eps": 950, "bvps": 12500, "roe": 0.08},
-    "CSM": {"name": "Công ty Công nghiệp Cao su Miền Nam", "industry": "Săm lốp & Phụ tùng", "exchange": "HOSE", "issueShare": 133637422, "eps": 420, "bvps": 14500, "roe": 0.03},
-    "TNT": {"name": "Công ty Tài nguyên và Tài chính Việt Nam", "industry": "Bất động sản", "exchange": "HOSE", "issueShare": 51000000, "eps": 150, "bvps": 10200, "roe": 0.01},
-    "TCB": {"name": "Ngân hàng Kỹ thương Việt Nam", "industry": "Ngân hàng", "exchange": "HOSE", "issueShare": 7086240000, "eps": 3690, "bvps": 24000, "roe": 0.15}
-}
-
-# BỘ LƯU TRỮ DANH MỤC VĨNH VIỄN
+# --- CƠ SỞ DỮ LIỆU ---
 FILE_BO_NHU = "portfolio_storage.json"
 
-def tai_danh_muc_tu_o_cung():
-    mac_dinh = {"TCB": [1000, 32000], "ACV": [500, 43000], "OIL": [2000, 14000], "PVC": [0, 0], "DRI": [0, 0], "CSM": [0, 0], "TNT": [0, 0]}
+def tai_danh_muc():
+    mac_dinh = {"TCB": [1000, 32000], "ACV": [500, 43000], "OIL": [2000, 14000]}
     if os.path.exists(FILE_BO_NHU):
         try:
             with open(FILE_BO_NHU, "r", encoding="utf-8") as f: return json.load(f)
         except: return mac_dinh
     return mac_dinh
 
-def luu_danh_muc_vao_o_cung(du_lieu):
-    with open(FILE_BO_NHU, "w", encoding="utf-8") as f:
-        json.dump(du_lieu, f, ensure_ascii=False, indent=4)
+def luu_danh_muc(du_lieu):
+    with open(FILE_BO_NHU, "w", encoding="utf-8") as f: json.dump(du_lieu, f, ensure_ascii=False, indent=4)
 
-DANH_MỤC_LIVE = tai_danh_muc_tu_o_cung()
+DANH_MỤC_LIVE = tai_danh_muc()
 DANH_SACH_MA = list(DANH_MỤC_LIVE.keys())
 
-st.sidebar.header("🔍 Phân tích Chuyên sâu")
-if not DANH_SACH_MA:
-    st.sidebar.warning("Bảng giá trống. Hãy sang Tab 'Bảng Giá' để thêm mã!")
-    ma_chon = ""
-else:
-    ma_chon = st.sidebar.selectbox("Chọn mã xem Biểu đồ & Hồ sơ:", DANH_SACH_MA)
-
-# ==========================================
-# 2. CÁC MODULE KẾT NỐI API & TÍNH TOÁN
-# ==========================================
-@st.cache_data(ttl=900, show_spinner=False)
-def lay_du_lieu_bieu_do(ma):
-    if not ma: return pd.DataFrame(), "Không có mã", ""
+# --- MODULES CƠ BẢN ---
+@st.cache_data(ttl=900)
+def get_data(ma):
+    if not ma: return pd.DataFrame()
     end_ts = int(datetime.now().timestamp())
     start_ts = int((datetime.now() - timedelta(days=365)).timestamp())
-    try:
-        url_vnd = f"https://dchart-api.vndirect.com.vn/dchart/history?symbol={ma}&resolution=D&from={start_ts}&to={end_ts}"
-        res = requests.get(url_vnd, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
-        if res.status_code == 200:
-            data = res.json()
-            if data.get('s') == 'ok' and data.get('t'):
-                df = pd.DataFrame({'Date': pd.to_datetime(data['t'], unit='s'), 'Open': data['o'], 'High': data['h'], 'Low': data['l'], 'Close': data['c'], 'Volume': data['v']})
-                df[['Open', 'High', 'Low', 'Close']] = df[['Open', 'High', 'Low', 'Close']] * 1000
-                return df.tail(180).reset_index(drop=True), "VNDirect DChart", ""
-    except: pass
-    return pd.DataFrame(), "Thất bại", ""
+    url = f"https://dchart-api.vndirect.com.vn/dchart/history?symbol={ma}&resolution=D&from={start_ts}&to={end_ts}"
+    res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
+    if res.status_code == 200:
+        data = res.json()
+        if 't' in data:
+            df = pd.DataFrame({'Date': pd.to_datetime(data['t'], unit='s'), 'Open': data['o'], 'High': data['h'], 'Low': data['l'], 'Close': data['c'], 'Volume': data['v']})
+            df[['Open', 'High', 'Low', 'Close']] *= 1000
+            return df
+    return pd.DataFrame()
 
-@st.cache_data(ttl=86400, show_spinner=False)
-def lay_ho_so_doanh_nghiep(ma):
-    if not ma: return {}
-    profile = {'industry': 'N/A', 'pe': 'N/A', 'pb': 'N/A', 'roe': 'N/A', 'exchange': 'N/A', 'issueShare': 0, 'marketCap': 0, 'eps': 0, 'bvps': 0, 'nguon_cap': 'Đang kết nối...'}
+@st.cache_data(ttl=3600)
+def get_news(ma):
+    news = []
     try:
-        url_tv = "https://scanner.tradingview.com/vietnam/scan"
-        payload = {"symbols": {"tickers": [f"HOSE:{ma}", f"HNX:{ma}", f"UPCOM:{ma}"]}, "columns": ["price_earnings_ttm", "price_book_ratio", "return_on_equity", "total_shares_outstanding", "market_cap_basic", "sector"]}
-        res_tv = requests.post(url_tv, json=payload, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
-        if res_tv.status_code == 200:
-            data = res_tv.json().get('data', [])
-            if data and len(data) > 0:
-                d = data[0].get('d', [])
-                profile['pe'] = d[0] if d[0] is not None else 'N/A'
-                profile['pb'] = d[1] if d[1] is not None else 'N/A'
-                profile['roe'] = d[2] if d[2] is not None else 'N/A'
-                profile['issueShare'] = d[3] if d[3] else 0
-                profile['marketCap'] = d[4] if d[4] else 0
-                profile['industry'] = d[5] if d[5] else 'N/A'
-                profile['exchange'] = data[0].get('s', '').split(':')[0]
-                profile['nguon_cap'] = 'Máy chủ TradingView'
-    except: pass
-    if profile['pe'] == 'N/A' or profile['issueShare'] == 0:
-        if ma in LOCAL_DB:
-            db = LOCAL_DB[ma]
-            profile.update({'industry': db['industry'], 'exchange': db['exchange'], 'issueShare': db['issueShare'], 'roe': db['roe'], 'eps': db['eps'], 'bvps': db['bvps'], 'nguon_cap': 'TradingView + CSDL Nội bộ'})
-    return profile
-
-@st.cache_data(ttl=86400, show_spinner=False)
-def lay_danh_gia_tcbs(ma):
-    try:
-        url = f"https://apipubaws.tcbs.com.vn/tcanalysis/v1/rating/{ma}"
-        res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=3)
-        if res.status_code == 200: return res.json().get('generalRating', 0)
-    except: pass
-    return 0
-
-# --- CỖ MÁY CÀO TIN TỨC RSS (GOOGLE NEWS) ---
-@st.cache_data(ttl=1800, show_spinner=False)
-def lay_tin_tuc_thi_truong(ma_cp):
-    tin_tuc = []
-    try:
-        query = urllib.parse.quote(f"{ma_cp} chứng khoán")
+        query = urllib.parse.quote(f"{ma} chứng khoán")
         url = f"https://news.google.com/rss/search?q={query}&hl=vi&gl=VN&ceid=VN:vi"
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        res = requests.get(url, headers=headers, timeout=5)
-        if res.status_code == 200:
-            root = ET.fromstring(res.content)
-            for item in root.findall('./channel/item')[:4]:
-                title = item.find('title').text
-                link = item.find('link').text
-                pubDate = item.find('pubDate').text
-                # Chuyển đổi định dạng ngày tháng rút gọn
-                tin_tuc.append({'title': title, 'link': link, 'date': pubDate[:16]})
-    except Exception:
-        pass
-    return tin_tuc
-
-# --- NLP: PHÂN TÍCH TÂM LÝ TIN TỨC ---
-def phan_tich_tam_ly_tin_tuc(tin_tuc):
-    tu_tich_cuc = ['tăng', 'lãi', 'kỳ vọng', 'khởi sắc', 'bứt phá', 'đột phá', 'hưởng lợi', 'cấp phép', 'trúng thầu', 'cổ tức', 'triển vọng', 'kỷ lục', 'mua', 'gom']
-    tu_tieu_cuc = ['giảm', 'lỗ', 'nợ', 'bán tháo', 'rủi ro', 'vi phạm', 'khó khăn', 'đình chỉ', 'cảnh báo', 'hủy', 'lao dốc', 'thua lỗ', 'kiện']
-    
-    diem = 0
-    for tin in tin_tuc:
-        title_lower = tin['title'].lower()
-        for tu in tu_tich_cuc:
-            if tu in title_lower: diem += 1
-        for tu in tu_tieu_cuc:
-            if tu in title_lower: diem -= 1
-            
-    if diem > 0: return "Tích cực 🟢", diem
-    elif diem < 0: return "Tiêu cực 🔴", diem
-    else: return "Trung lập 🟡", diem
-
-# --- CÁC HÀM TOÁN HỌC ---
-def tinh_rsi(series, period=14):
-    delta = series.diff(); up = delta.clip(lower=0); down = -1 * delta.clip(upper=0)
-    ema_up = up.ewm(com=period-1, adjust=False).mean(); ema_down = down.ewm(com=period-1, adjust=False).mean()
-    rs = ema_up / ema_down; return 100 - (100 / (1 + rs))
-
-def tinh_macd(series):
-    e12 = series.ewm(span=12, adjust=False).mean(); e26 = series.ewm(span=26, adjust=False).mean()
-    macd = e12 - e26; sig = macd.ewm(span=9, adjust=False).mean(); return macd, sig
-
-def format_metric(val, is_pct=False):
-    if val in [None, 'N/A', '']: return "N/A"
-    try:
-        v = float(val)
-        if is_pct: return f"{v*100:.2f}%" if abs(v) < 2 else f"{v:.2f}%"
-        return f"{v:.2f}"
-    except: return "N/A"
-
-# --- ĐỘNG CƠ CỐ VẤN NỘI SUY (CHO MÃ MỚI) ---
-def tao_bao_cao_dong(ma_cp, ho_so, rsi, macd_cur, sig_cur, m20, m50, k_ban, diem_tin_tuc):
-    nganh = str(ho_so.get('industry', '')).lower()
-    pe = ho_so.get('pe', 'N/A')
-    
-    # 1. Nội suy Vĩ mô dựa trên Ngành của TradingView
-    if "hàng không" in nganh or "aviation" in nganh:
-        if "Cơ sở" in k_ban: vimo = "Ngành hàng không hưởng lợi nhờ lượng khách quốc tế phục hồi ổn định."
-        elif "Căng thẳng" in k_ban: vimo = "Căng thẳng địa chính trị đẩy giá nhiên liệu bay Jet A1 lên cao, ăn mòn lợi nhuận ngành."
-        else: vimo = "Nới lỏng tiền tệ kích thích du lịch và nhu cầu vận tải, tạo đột phá sản lượng."
-    elif "ngân hàng" in nganh or "bank" in nganh:
-        if "Cơ sở" in k_ban: vimo = "Môi trường lãi suất ổn định hỗ trợ tăng trưởng tín dụng và cải thiện NIM."
-        elif "Căng thẳng" in k_ban: vimo = "Áp lực tỷ giá buộc NHNN hút ròng, rủi ro nợ xấu gia tăng từ khối doanh nghiệp."
-        else: vimo = "Dòng tiền rẻ kích thích tín dụng bùng nổ, ngân hàng dẫn dắt đà tăng toàn thị trường."
-    elif "dầu khí" in nganh or "oil" in nganh or "energy" in nganh:
-        if "Cơ sở" in k_ban: vimo = "Giá dầu neo ở mức ổn định quanh 75-80 USD/thùng, đảm bảo biên lợi nhuận tốt cho toàn chuỗi giá trị."
-        elif "Căng thẳng" in k_ban: vimo = "Cú sốc địa chính trị Trung Đông đẩy giá dầu Brent leo thang, mang lại lợi ích siêu ngạch cho nhóm thượng nguồn."
-        else: vimo = "Tiền rẻ thúc đẩy đầu tư hạ tầng năng lượng, tiến độ các dự án như Lô B Ô Môn được đẩy nhanh."
-    elif "bất động sản" in nganh or "real estate" in nganh:
-        if "Cơ sở" in k_ban: vimo = "Luật Đất đai mới thẩm thấu, các dự án pháp lý minh bạch dần được khơi thông."
-        elif "Căng thẳng" in k_ban: vimo = "Dòng vốn co cụm lại, áp lực đáo hạn trái phiếu đè nặng lên thanh khoản doanh nghiệp."
-        else: vimo = "Lãi suất vay mua nhà chạm đáy kích hoạt làn sóng đầu cơ và nhu cầu thực quay trở lại mạnh mẽ."
-    elif "thép" in nganh or "cao su" in nganh or "vật liệu" in nganh:
-        if "Cơ sở" in k_ban: vimo = "Nhu cầu xây dựng và công nghiệp phục hồi chậm nhưng chắc, giá nguyên vật liệu ổn định."
-        elif "Căng thẳng" in k_ban: vimo = "Đứt gãy chuỗi cung ứng làm giá cước vận tải biển tăng vọt, bào mòn biên lợi nhuận xuất khẩu."
-        else: vimo = "Đầu tư công giải ngân mạnh nhờ dòng tiền rẻ, trực tiếp kéo lượng tiêu thụ vật liệu xây dựng."
-    elif "công nghệ" in nganh or "tech" in nganh or "công nghệ thông tin" in nganh:
-        if "Cơ sở" in k_ban: vimo = "Chuyển đổi số tiếp tục là động lực tăng trưởng bền vững bất chấp chu kỳ kinh tế."
-        elif "Căng thẳng" in k_ban: vimo = "Thiếu hụt linh kiện bán dẫn toàn cầu có thể làm chậm trễ tiến độ bàn giao các gói thầu phần cứng."
-        else: vimo = "Dòng vốn FDI công nghệ cao đổ bộ mạnh mẽ nhờ chính sách thu hút đầu tư mở rộng."
-    else:
-        if "Cơ sở" in k_ban: vimo = f"Ngành {nganh.title() if nganh != 'n/a' else 'đang xem xét'} duy trì hoạt động kinh doanh cốt lõi ở mức ổn định theo tăng trưởng GDP."
-        elif "Căng thẳng" in k_ban: vimo = f"Chuỗi cung ứng và chi phí đầu vào của lĩnh vực {nganh.title() if nganh != 'n/a' else 'này'} đối mặt với áp lực gia tăng do lạm phát."
-        else: vimo = f"Lãi suất thấp giúp doanh nghiệp {nganh.title() if nganh != 'n/a' else 'này'} cắt giảm chi phí vốn và kích thích mở rộng quy mô."
-
-    # 2. Nội suy Định giá
-    pe_val = 15.0
-    try: pe_val = float(pe)
+        res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
+        root = ET.fromstring(res.content)
+        for item in root.findall('./channel/item')[:3]:
+            news.append({'title': item.find('title').text, 'link': item.find('link').text})
     except: pass
-    
-    if pe_val < 10: dinh_gia = f"Mức P/E {pe_val:.1f} đang cực kỳ hấp dẫn (Undervalued), tạo biên an toàn lớn."
-    elif pe_val > 20: dinh_gia = f"Mức P/E {pe_val:.1f} cho thấy kỳ vọng rất cao, tiềm ẩn rủi ro nếu lợi nhuận không đột phá."
-    else: dinh_gia = f"Mức P/E {pe_val:.1f} phản ánh định giá quanh mức hợp lý (Fair Value)."
-    
-    src = [{"n": "Trí tuệ Nhân tạo Phân tích Động (AI Engine)", "t": f"Mã {ma_cp} đang được đánh giá dựa trên nội suy P/E ngành. {dinh_gia}"}]
-    
-    # 3. Thuật toán chấm điểm (Kết hợp Kỹ thuật + Định giá + Tin tức)
-    diem = diem_tin_tuc
-    if rsi < 45: diem += 1
-    elif rsi > 70: diem -= 1
-    if macd_cur > sig_cur: diem += 1
-    if m20 > m50: diem += 1
-    if pe_val < 12: diem += 1
-    
-    if diem >= 3: act = "MUA MẠNH: Định giá hấp dẫn, tin tức vĩ mô hỗ trợ, kết hợp dòng tiền kỹ thuật vào sóng."
-    elif diem <= 0: act = "HẠ TỶ TRỌNG: Động lượng suy yếu hoặc tin tức tiêu cực bủa vây, cần ưu tiên quản trị rủi ro."
-    else: act = "NẮM GIỮ / TÍCH LŨY: Trạng thái trung lập, quan sát thêm biến động khối lượng."
-    
-    return vimo, src, act
+    return news
 
+# --- TAB QUẢN LÝ ---
+tab0, tab1, tab2, tab3 = st.tabs(["🖥️ Bảng giá & Watchlist", "📊 Biểu đồ", "🏢 Hồ sơ", "🤖 AI Advisor & Tin tức"])
 
-# ==========================================
-# 3. GIAO DIỆN CHÍNH (5 TABS CHUYÊN NGHIỆP)
-# ==========================================
-tab0, tab1, tab2, tab3, tab4 = st.tabs(["🖥️ Bảng Giá Điện Tử", "📊 Biểu đồ Kỹ thuật", "🏢 Hồ sơ Doanh nghiệp", "📡 Bộ lọc & AI Advisor", "💼 Quản lý Danh mục"])
-
-# --- TAB 0: BẢNG GIÁ ĐIỆN TỬ ---
 with tab0:
-    st.subheader("Bảng Giá Trực Tuyến Đa Sàn")
-    with st.expander("⚙️ Quản lý Danh sách Theo dõi (Watchlist Manager)", expanded=False):
-        c_a1, c_a2, c_d1, c_d2 = st.columns([3, 2, 3, 2])
-        with c_a1: m_moi = st.text_input("Thêm mã", placeholder="Nhập mã mới...", label_visibility="collapsed").upper().strip()
-        with c_a2: 
-            if st.button("➕ Thêm mã", use_container_width=True):
-                if m_moi and m_moi not in DANH_MỤC_LIVE: DANH_MỤC_LIVE[m_moi] = [0, 0]; luu_danh_muc_vao_o_cung(DANH_MỤC_LIVE); st.rerun()
-        with c_d1: m_xoa = st.selectbox("Xóa mã", ["-- Chọn mã muốn xóa khỏi Watchlist --"] + DANH_SACH_MA, label_visibility="collapsed")
-        with c_d2:
-            if st.button("🗑️ Xóa mã", type="primary", use_container_width=True):
-                if m_xoa != "-- Chọn mã muốn xóa khỏi Watchlist --": del DANH_MỤC_LIVE[m_xoa]; luu_danh_muc_vao_o_cung(DANH_MỤC_LIVE); st.rerun()
+    st.subheader("Bảng Giá")
+    with st.expander("Quản lý danh sách", expanded=True):
+        col1, col2 = st.columns([3, 1])
+        m_moi = col1.text_input("Thêm mã mới").upper()
+        if col2.button("Thêm"):
+            if m_moi and m_moi not in DANH_MỤC_LIVE: DANH_MỤC_LIVE[m_moi] = [0, 0]; luu_danh_muc(DANH_MỤC_LIVE); st.rerun()
 
-    css_bg = "<style>.stock-board-container{width:100%;overflow-x:auto;background-color:#111;padding:10px;border-radius:8px;}.stock-board{width:100%;border-collapse:collapse;font-family:'Consolas',monospace;font-size:14px;background-color:#111;color:#fff;}.stock-board th,.stock-board td{border:1px solid #333;padding:8px 12px;text-align:right;white-space:nowrap;}.stock-board th{background-color:#222;color:#ccc;text-align:center;font-weight:bold;}.col-ma{text-align:left!important;font-weight:bold;}.c-ref{color:#F2C94C!important;}.c-ceil{color:#E040FB!important;}.c-floor{color:#00E5FF!important;}.c-up{color:#00E676!important;}.c-down{color:#FF5252!important;}</style>"
-    html_c = css_bg + '<div class="stock-board-container"><table class="stock-board"><tr><th>Mã</th><th class="c-ref">TC</th><th class="c-ceil">Trần</th><th class="c-floor">Sàn</th><th>Khớp Lệnh</th><th>+/-</th><th>%</th><th>Tổng KL</th><th>Mở cửa</th><th>Cao nhất</th><th>Thấp nhất</th></tr>'
-    
-    with st.spinner("Đang đồng bộ bảng điện tử..."):
-        if DANH_SACH_MA:
-            for m in DANH_SACH_MA:
-                df, _, _ = lay_du_lieu_bieu_do(m)
-                if df.empty or len(df) < 2: continue
-                san = lay_ho_so_doanh_nghiep(m).get('exchange', 'HOSE')
-                bd = 0.15 if san == 'UPCOM' else (0.1 if san == 'HNX' else 0.07)
-                tc, gia, mc, cao, thap, tkl = df['Close'].iloc[-2], df['Close'].iloc[-1], df['Open'].iloc[-1], df['High'].iloc[-1], df['Low'].iloc[-1], df['Volume'].iloc[-1]
-                tr, sg = round(tc*(1+bd)/100)*100, round(tc*(1-bd)/100)*100
-                td, pt = gia-tc, (gia-tc)/tc*100 if tc>0 else 0
-                def mau(g): return "c-ceil" if g>=tr else "c-floor" if g<=sg else "c-up" if g>tc else "c-down" if g<tc else "c-ref"
-                m_g, dc = mau(gia), "+" if td>0 else ""
-                html_c += f"<tr><td class='col-ma {m_g}'>{m}</td><td class='c-ref'>{tc:,.0f}</td><td class='c-ceil'>{tr:,.0f}</td><td class='c-floor'>{sg:,.0f}</td><td class='{m_g}' style='font-weight:bold;'>{gia:,.0f}</td><td class='{m_g}'>{dc}{td:,.0f}</td><td class='{m_g}'>{dc}{pt:.2f}%</td><td>{tkl:,.0f}</td><td class='{mau(mc)}'>{mc:,.0f}</td><td class='{mau(cao)}'>{cao:,.0f}</td><td class='{mau(thap)}'>{thap:,.0f}</td></tr>"
-        else: html_c += "<tr><td colspan='11' style='text-align:center;'>Watchlist trống.</td></tr>"
-    html_c += "</table></div>"; st.markdown(html_c, unsafe_allow_html=True)
+    # Danh sách mã đơn giản để test
+    for ma in DANH_SACH_MA:
+        st.write(f"Mã: {ma}")
 
-# --- TAB 1: BIỂU ĐỒ KỸ THUẬT ---
 with tab1:
+    ma_chon = st.selectbox("Chọn mã", [""] + DANH_SACH_MA)
     if ma_chon:
-        st.subheader(f"Trung tâm Phân tích Kỹ thuật - Mã: {ma_chon}")
-        col_t1, col_t2, col_t3, col_t4 = st.columns(4)
-        show_vol = col_t1.checkbox("Bật Volume", value=True)
-        show_ma20 = col_t2.checkbox("Bật MA 20", value=True)
-        show_ma50 = col_t3.checkbox("Bật MA 50", value=False)
-        show_bb = col_t4.checkbox("Bật Bollinger Bands", value=False)
-
-        df, nguon, loi = lay_du_lieu_bieu_do(ma_chon)
+        df = get_data(ma_chon)
         if not df.empty:
-            df['MA20'] = df['Close'].rolling(20).mean(); df['MA50'] = df['Close'].rolling(50).mean()
-            df['BB_Std'] = df['Close'].rolling(20).std()
-            df['BB_Upper'] = df['MA20'] + (df['BB_Std'] * 2); df['BB_Lower'] = df['MA20'] - (df['BB_Std'] * 2)
-
-            fig = make_subplots(rows=2 if show_vol else 1, cols=1, shared_xaxes=True, vertical_spacing=0.05, row_heights=[0.75, 0.25] if show_vol else None)
-            fig.add_trace(go.Candlestick(x=df['Date'], open=df['Open'], high=df['High'], low=df['Low'], close=df['Close']), row=1, col=1)
-            
-            if show_ma20: fig.add_trace(go.Scatter(x=df['Date'], y=df['MA20'], mode='lines', name='MA 20', line=dict(color='#2962FF')), row=1, col=1)
-            if show_ma50: fig.add_trace(go.Scatter(x=df['Date'], y=df['MA50'], mode='lines', name='MA 50', line=dict(color='#FF6D00')), row=1, col=1)
-            if show_bb:
-                fig.add_trace(go.Scatter(x=df['Date'], y=df['BB_Upper'], mode='lines', name='BB Upper', line=dict(color='gray', dash='dot')), row=1, col=1)
-                fig.add_trace(go.Scatter(x=df['Date'], y=df['BB_Lower'], mode='lines', name='BB Lower', line=dict(color='gray', dash='dot'), fill='tonexty', fillcolor='rgba(128,128,128,0.1)'), row=1, col=1)
-
-            if show_vol:
-                vol_colors = ['#26A69A' if row['Close'] >= row['Open'] else '#EF5350' for i, row in df.iterrows()]
-                fig.add_trace(go.Bar(x=df['Date'], y=df['Volume'], marker_color=vol_colors), row=2, col=1)
-
-            fig.update_layout(xaxis_rangeslider_visible=False, height=600, margin=dict(t=30, b=10, l=10, r=10))
+            fig = go.Figure(data=[go.Candlestick(x=df['Date'], open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'])])
             st.plotly_chart(fig, use_container_width=True)
 
-# --- TAB 2: HỒ SƠ ---
-with tab2:
-    if ma_chon:
-        st.subheader(f"Hồ sơ Doanh nghiệp & Chỉ số - Mã: {ma_chon}")
-        profile = lay_ho_so_doanh_nghiep(ma_chon)
-        pe_hien_thi = profile.get('pe'); pb_hien_thi = profile.get('pb')
-        von_hoa_ty = profile.get('marketCap', 0) / 1_000_000_000
-        
-        df, _, _ = lay_du_lieu_bieu_do(ma_chon)
-        gia_hien_tai, klgd_20 = 0, 0
-        if not df.empty:
-            gia_hien_tai = df['Close'].iloc[-1]
-            klgd_20 = df['Volume'].tail(20).mean()
-            if profile.get('nguon_cap') == 'TradingView + CSDL Nội bộ' and gia_hien_tai > 0:
-                if profile.get('eps', 0) > 0: pe_hien_thi = gia_hien_tai / profile['eps']
-                if profile.get('bvps', 0) > 0: pb_hien_thi = gia_hien_tai / profile['bvps']
-                von_hoa_ty = (gia_hien_tai * profile.get('issueShare', 0)) / 1_000_000_000
-
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Ngành nghề", str(profile.get('industry', 'N/A')))
-        c2.metric("P/E", format_metric(pe_hien_thi))
-        c3.metric("P/B", format_metric(pb_hien_thi))
-        c4.metric("ROE", format_metric(profile.get('roe'), is_pct=True))
-
-        st.markdown("---")
-        st.write(f"- Thị giá: `{gia_hien_tai:,.0f}` VNĐ")
-        st.write(f"- Vốn hóa: `{von_hoa_ty:,.0f}` tỷ VNĐ")
-        st.write(f"- Khối lượng lưu hành: `{profile.get('issueShare', 0):,.0f}`")
-
-# --- TAB 3: RADAR & AI ADVISOR ---
 with tab3:
-    st.subheader("Radar Quét Khối lượng & Tín hiệu")
-    if DANH_SACH_MA:
-        if st.button("Bắt đầu Quét Hệ thống Toàn Watchlist"):
-            ket_qua = []
-            with st.spinner("Đang rà soát..."):
-                for ma in DANH_SACH_MA:
-                    df_scan, _, _ = lay_du_lieu_bieu_do(ma)
-                    if not df_scan.empty and len(df_scan) >= 50:
-                        df_scan['RSI'] = tinh_rsi(df_scan['Close'])
-                        df_scan['MA20'] = df_scan['Close'].rolling(20).mean()
-                        df_scan['MA50'] = df_scan['Close'].rolling(50).mean()
-                        df_scan['Vol20'] = df_scan['Volume'].rolling(20).mean()
-                        macd, signal = tinh_macd(df_scan['Close'])
-                        
-                        gia, rsi = df_scan['Close'].iloc[-1], df_scan['RSI'].iloc[-1]
-                        diem_mua, tin_hieu = 0, []
-                        
-                        if rsi < 35: diem_mua += 1; tin_hieu.append("RSI vùng đáy")
-                        elif rsi > 70: diem_mua -= 1; tin_hieu.append("RSI quá mua")
-                        if df_scan['MA20'].iloc[-1] > df_scan['MA50'].iloc[-1]: diem_mua += 1; tin_hieu.append("MA Crossover")
-                        if macd.iloc[-1] > signal.iloc[-1]: diem_mua += 1; tin_hieu.append("MACD Báo mua")
-                            
-                        dot_bien = "Bình thường"
-                        if df_scan['Volume'].iloc[-1] > (df_scan['Vol20'].iloc[-1] * 1.5): diem_mua += 1; dot_bien = "NỔ VOL"
-                            
-                        if diem_mua >= 3: khuyen_nghi = "MUA MẠNH"
-                        elif diem_mua >= 1: khuyen_nghi = "NẮM GIỮ"
-                        else: khuyen_nghi = "RỦI RO"
-                            
-                        ket_qua.append({"Mã": ma, "Giá": f"{gia:,.0f}", "RSI": round(rsi, 2), "Dòng tiền": dot_bien, "Tín hiệu": ", ".join(tin_hieu) if tin_hieu else "Tích lũy", "Hành động": khuyen_nghi})
-            if ket_qua:
-                st.dataframe(pd.DataFrame(ket_qua), use_container_width=True, hide_index=True)
-
-    st.markdown("---")
-    st.subheader("Hệ thống Cố vấn Đầu tư Chuyên nghiệp (AI Advisor Dynamic Engine)")
-    
-    col_a1, col_a2 = st.columns(2)
-    with col_a1: m_pt = st.selectbox("1. Chọn mã cổ phiếu:", ["-- Chọn mã --"] + DANH_SACH_MA)
-    with col_a2: k_ban = st.radio("2. Kịch bản Vĩ mô:", ["Cơ sở", "Căng thẳng Địa chính trị", "Nới lỏng Tiền tệ"], horizontal=True)
-
-    if m_pt != "-- Chọn mã --":
-        with st.spinner("AI đang nội soi dữ liệu và trích xuất tin tức thị trường..."):
-            df_pt, _, _ = lay_du_lieu_bieu_do(m_pt)
-            if not df_pt.empty and len(df_pt) >= 50:
-                df_pt['RSI'] = tinh_rsi(df_pt['Close'])
-                df_pt['MA20'] = df_pt['Close'].rolling(20).mean()
-                df_pt['MA50'] = df_pt['Close'].rolling(50).mean()
-                macd_pt, signal_pt = tinh_macd(df_pt['Close'])
-                
-                g_pt, r_pt = df_pt['Close'].iloc[-1], df_pt['RSI'].iloc[-1]
-                m_cur, s_cur = macd_pt.iloc[-1], signal_pt.iloc[-1]
-                m20, m50 = df_pt['MA20'].iloc[-1], df_pt['MA50'].iloc[-1]
-                
-                # Fetch dynamically
-                ho_so = lay_ho_so_doanh_nghiep(m_pt)
-                diem_tcbs = lay_danh_gia_tcbs(m_pt)
-                tin_tuc_live = lay_tin_tuc_thi_truong(m_pt)
-                tam_ly_tin, diem_tin = phan_tich_tam_ly_tin_tuc(tin_tuc_live)
-                
-                vim_t, src_list, act_t = tao_bao_cao_dong(m_pt, ho_so, r_pt, m_cur, s_cur, m20, m50, k_ban, diem_tin)
-
-                r_txt = "Quá Bán (Cơ hội mua)" if r_pt < 30 else "Quá Mua (Rủi ro chỉnh)" if r_pt > 70 else "Tích lũy (Cân bằng)"
-                m_txt = "Mua (Cắt lên Signal)" if m_cur > s_cur else "Suy yếu (Cắt xuống Signal)"
-                t_txt = "Tăng (Uptrend)" if m20 > m50 else "Giảm/Tích lũy (Downtrend)"
-
-                src_html = ""
-                for s in src_list: src_html += f"<div style='border-left:3px solid #cbd5e1;background:#f8fafc;padding:12px;border-radius:0 6px 6px 0;margin-top:10px;'><div style='font-size:13px;font-weight:bold;color:#475569;'>{s['n']}</div><div style='font-size:14px;font-style:italic;color:#4b5563;'>{s['t']}</div></div>"
-
-                # Render News
-                news_html = ""
-                if tin_tuc_live:
-                    for t in tin_tuc_live:
-                        news_html += f"<div style='margin-bottom:8px;'><a href='{t['link']}' target='_blank' style='text-decoration:none;color:#2563eb;font-weight:500;'>• {t['title']}</a> <span style='color:#94a3b8;font-size:12px;'>({t['date']})</span></div>"
-                else:
-                    news_html = "<div style='color:#64748b;font-style:italic;'>Không có tin tức mới nổi bật trong 24h qua.</div>"
-
-                rep = f\"\"\"
-                <div style='background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:25px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);'>
-                    <div style='border-bottom:1px solid #e5e7eb;padding-bottom:15px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;'>
-                        <h3 style='margin:0;color:#111827;font-size:22px;'>Báo Cáo AI Advisor: {m_pt}</h3>
-                        <div style='background:#dbeafe;color:#166534;padding:6px 12px;border-radius:20px;font-size:14px;font-weight:600;'>{diem_tcbs}/5.0 (TCBS Rating)</div>
-                    </div>
-                    <div style='display:flex;gap:15px;margin-bottom:25px;'>
-                        <div style='background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:15px;flex:1;'><div style='color:#64748b;font-size:12px;font-weight:600;'>Thị giá</div><div style='color:#0f172a;font-size:20px;font-weight:bold;'>{g_pt:,.0f}</div></div>
-                        <div style='background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:15px;flex:1;'><div style='color:#64748b;font-size:12px;font-weight:600;'>RSI</div><div style='color:#2563eb;font-size:20px;font-weight:bold;'>{r_pt:.1f} ({r_txt})</div></div>
-                        <div style='background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:15px;flex:1;'><div style='color:#64748b;font-size:12px;font-weight:600;'>MACD</div><div style='color:#0f172a;font-size:20px;font-weight:bold;'>{m_txt}</div></div>
-                    </div>
-                    
-                    <div style='border:1px solid #e5e7eb;border-radius:8px;margin-bottom:20px;'><div style='background:#f9fafb;border-bottom:1px solid #e5e7eb;padding:12px 15px;font-weight:600;color:#374151;'>1. Vĩ mô & Ngành ({k_ban})</div><div style='padding:15px;color:#4b5563;'>{vim_t}</div></div>
-                    <div style='border:1px solid #e5e7eb;border-radius:8px;margin-bottom:20px;'><div style='background:#f9fafb;border-bottom:1px solid #e5e7eb;padding:12px 15px;font-weight:600;color:#374151;'>2. Phân tích Kỹ thuật & Định giá</div><div style='padding:15px;'><div style='color:#4b5563;margin-bottom:10px;'><b>Xu hướng:</b> Đường MA20 {'nằm trên' if m20>m50 else 'nằm dưới'} MA50, xác nhận <b>{t_txt}</b>.</div>{src_html}</div></div>
-                    
-                    <div style='border:1px solid #e5e7eb;border-radius:8px;margin-bottom:20px; border-left: 4px solid #3b82f6;'>
-                        <div style='background:#f9fafb;border-bottom:1px solid #e5e7eb;padding:12px 15px;font-weight:600;color:#1e40af;'>3. Tin tức Thị trường Mới nhất (Real-time News) - Tâm lý: {tam_ly_tin}</div>
-                        <div style='padding:15px;'>{news_html}</div>
-                    </div>
-                    
-                    <div style='border:2px solid #22c55e;background:#f0fdf4;border-radius:8px;'><div style='background:#dcfce7;border-bottom:1px solid #bbf7d0;padding:12px 15px;font-weight:600;color:#166534;'>4. Khuyến nghị Định lượng Tích hợp Phân tích Động</div><div style='padding:15px;color:#166534;font-weight:600;font-size:16px;'>{act_t}</div></div>
-                </div>
-                \"\"\"
-                st.markdown(rep, unsafe_allow_html=True)
-
-with tab4:
-    st.subheader("Hệ thống Quản trị Tài sản ròng")
-    if DANH_SACH_MA:
-        du_lieu_cap_nhat = {}
-        col_h1, col_h2, col_h3 = st.columns([2, 3, 3])
-        col_h1.write("**Mã CP**"); col_h2.write("**Số lượng**"); col_h3.write("**Giá vốn (VNĐ)**")
-        
-        for ma in DANH_SACH_MA:
-            c1, c2, c3 = st.columns([2, 3, 3])
-            c1.write(f"### {ma}")
-            sl = c2.number_input(f"SL {ma}", min_value=0, step=100, value=DANH_MỤC_LIVE.get(ma, [0, 0])[0], label_visibility="collapsed", key=f"sl_{ma}")
-            gia_v = c3.number_input(f"Giá {ma}", min_value=0, step=500, value=DANH_MỤC_LIVE.get(ma, [0, 0])[1], label_visibility="collapsed", key=f"gv_{ma}")
-            du_lieu_cap_nhat[ma] = [sl, gia_v]
-
-        if st.button("Xác nhận & Lưu Cấu Hình Danh Mục"):
-            luu_danh_muc_vao_o_cung(du_lieu_cap_nhat)
-            st.success("Đã lưu cấu hình danh mục vĩnh viễn!")
-            time.sleep(0.5); st.rerun() 
-
-        danh_sach_hien_thi = [{"Mã CP": k, "Số lượng": v[0], "Giá vốn": v[1]} for k, v in du_lieu_cap_nhat.items() if v[0] > 0]
-        if danh_sach_hien_thi:
-            st.markdown("---")
-            st.write("### Hiệu suất Danh mục đầu tư thực tế")
-            hang_danh_muc, tong_von, tong_gt = [], 0, 0
-            for item in danh_sach_hien_thi:
-                ma = item["Mã CP"]; sl = item["Số lượng"]; gia_v = item["Giá vốn"]
-                df_live, _, _ = lay_du_lieu_bieu_do(ma)
-                gia_live = df_live['Close'].iloc[-1] if not df_live.empty else gia_v
-                tt_von = sl * gia_v; tt_live = sl * gia_live
-                ln = tt_live - tt_von
-                
-                tong_von += tt_von; tong_gt += tt_live
-                hang_danh_muc.append({"Mã CP": ma, "Số lượng": f"{sl:,}", "Giá mua": f"{gia_v:,.0f}", "Giá hiện tại": f"{gia_live:,.0f}", "Tổng vốn": tt_von, "Giá trị": tt_live, "Lời / Lỗ": ln, "Hiệu suất": f"{(ln / tt_von * 100) if tt_von > 0 else 0:.2f}%"})
-                
-            df_ptf = pd.DataFrame(hang_danh_muc)
-            tong_loi_nhuan = tong_gt - tong_von
-            pct_tong = (tong_loi_nhuan / tong_von * 100) if tong_von > 0 else 0
-            
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Tổng vốn đầu tư", f"{tong_von:,.0f} VNĐ")
-            m2.metric("Tổng giá trị tài sản (NAV)", f"{tong_gt:,.0f} VNĐ")
-            m3.metric("Tổng Lời / Lỗ thực tế", f"{tong_loi_nhuan:,.0f} VNĐ ({pct_tong:.2f}%)", delta=f"{tong_loi_nhuan:,.0f} VNĐ" if tong_loi_nhuan >= 0 else f"{tong_loi_nhuan:,.0f} VNĐ")
-            
-            df_disp = df_ptf.copy()
-            df_disp["Tổng vốn"] = df_disp["Tổng vốn"].map("{:,.0f}".format)
-            df_disp["Giá trị"] = df_disp["Giá trị"].map("{:,.0f}".format)
-            df_disp["Lời / Lỗ"] = df_disp["Lời / Lỗ"].map("{:,.0f}".format)
-            st.dataframe(df_disp.drop(columns=["Tổng vốn", "Giá trị"]), use_container_width=True, hide_index=True)
-            
-            st.write("### Tỷ trọng tài sản trong danh mục")
-            fig_pie = px.pie(df_ptf, values='Giá trị', names='Mã CP', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
-            st.plotly_chart(fig_pie, use_container_width=True)
-"""
-with open("app.py", "w", encoding="utf-8") as f:
-    f.write(app_code)}
+    ma_pt = st.selectbox("Chọn mã để AI phân tích", [""] + DANH_SACH_MA)
+    if ma_pt:
+        st.subheader(f"Dữ liệu & Tin tức: {ma_pt}")
+        news = get_news(ma_pt)
+        for n in news:
+            st.write(f"• [{n['title']}]({n['link']})")
