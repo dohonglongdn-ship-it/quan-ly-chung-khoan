@@ -5,8 +5,8 @@ import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 import time
-import os # THƯ VIỆN KIỂM TRA HỆ THỐNG FILE
-import json # THƯ VIỆN GIẢI MÃ BỘ LƯU TRỮ JSON
+import os 
+import json 
 from datetime import datetime, timedelta
 
 # 1. CẤU HÌNH TRANG
@@ -33,7 +33,6 @@ LOCAL_DB = {
 FILE_BO_NHU = "portfolio_storage.json"
 
 def tai_danh_muc_tu_o_cung():
-    # Cấu hình mặc định ban đầu nếu file chưa từng tồn tại
     mac_dinh = {"TCB": [1000, 32000], "ACV": [500, 43000], "OIL": [2000, 14000], "PVC": [0, 0], "DRI": [0, 0], "CSM": [0, 0], "TNT": [0, 0]}
     if os.path.exists(FILE_BO_NHU):
         try:
@@ -47,7 +46,6 @@ def luu_danh_muc_vao_o_cung(du_lieu):
     with open(FILE_BO_NHU, "w", encoding="utf-8") as f:
         json.dump(du_lieu, f, ensure_ascii=False, indent=4)
 
-# Tải dữ liệu danh mục từ bộ lưu trữ lên ngay khi mở ứng dụng
 DANH_MỤC_LIVE = tai_danh_muc_tu_o_cung()
 
 # --- MODULE 1: KẾT NỐI BIỂU ĐỒ LIVE ---
@@ -285,12 +283,11 @@ with tab3:
             csv_radar = df_kq.to_csv(index=False).encode('utf-8')
             st.download_button(label="📥 Xuất báo cáo Radar Dòng tiền (CSV)", data=csv_radar, file_name="bao_cao_radar_live.csv", mime="text/csv")
 
-# --- TAB 4 (NÂNG CẤP): QUẢN LÝ DANH MỤC TÍCH HỢP BỘ LƯU TRỮ ---
+# --- TAB 4: QUẢN LÝ DANH MỤC TÍCH HỢP BỘ LƯU TRỮ ---
 with tab4:
     st.subheader("💼 Hệ thống Quản trị Tài sản ròng (Đã tích hợp CSDL vĩnh viễn)")
     st.markdown("Nhập khối lượng tài sản của anh vào bảng bên dưới. Sau khi nhập xong, bấm nút **Lưu** ở cuối bảng để hệ thống ghi nhớ vĩnh viễn.")
 
-    # Khởi tạo một từ điển tạm để hứng dữ liệu người dùng thay đổi trên giao diện
     du_lieu_cap_nhat = {}
     
     col_h1, col_h2, col_h3 = st.columns([2, 3, 3])
@@ -298,30 +295,27 @@ with tab4:
     col_h2.write("**Số lượng nắm giữ (Cổ phiếu)**")
     col_h3.write("**Giá mua trung bình (VNĐ)**")
     
-    # Duyệt qua các mã và nạp giá trị có sẵn từ cơ sở dữ liệu file JSON
     for ma in DANH_SACH_MA:
         c1, c2, c3 = st.columns([2, 3, 3])
         c1.write(f"### {ma}")
         
-        # Lấy giá trị đã lưu trong file JSON (nếu chưa có thì lấy mốc 0)
         sl_mac_dinh = DANH_MỤC_LIVE.get(ma, [0, 0])[0]
         gia_mac_dinh = DANH_MỤC_LIVE.get(ma, [0, 0])[1]
         
         sl = c2.number_input(f"Số lượng {ma}", min_value=0, step=100, value=sl_mac_dinh, label_visibility="collapsed", key=f"sl_{ma}")
-        gia_v = c3.number_input(f"Giá vốn {ma}", min_value=0, step=500, value=gia_v = gia_mac_dinh, label_visibility="collapsed", key=f"gv_{ma}")
         
-        # Đưa vào từ điển tạm thời
+        # BẢN VÁ LỖI NẰM TẠI ĐÂY: Gỡ bỏ cú pháp sai 'gia_v ='
+        gia_v = c3.number_input(f"Giá vốn {ma}", min_value=0, step=500, value=gia_mac_dinh, label_visibility="collapsed", key=f"gv_{ma}")
+        
         du_lieu_cap_nhat[ma] = [sl, gia_v]
 
-    # NÚT BẤM LƯU DỮ LIỆU VÀO CƠ SỞ DỮ LIỆU FILE COIL CORNER
     st.markdown(" ")
     if st.button("💾 Xác nhận & Lưu Cấu Hình Danh Mục Vĩnh Viễn"):
         luu_danh_muc_vao_o_cung(du_lieu_cap_nhat)
         st.success("✅ Hệ thống đã ghi nhận cấu trúc tài sản ròng vào CSDL thành công! Dữ liệu sẽ không bị mất khi F5.")
         time.sleep(1)
-        st.rerun() # Khởi động lại app để áp dụng bộ nhớ mới ngay lập tức
+        st.rerun() 
 
-    # Lọc các cổ phiếu có số lượng lớn hơn 0 để tính toán hiệu năng danh mục thực tế
     danh_sach_hien_thi = [{"Mã CP": k, "Số lượng": v[0], "Giá vốn": v[1]} for k, v in du_lieu_cap_nhat.items() if v[0] > 0]
 
     if danh_sach_hien_thi:
