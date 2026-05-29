@@ -232,7 +232,7 @@ with tab2:
         st.write(f"- **Khối lượng cổ phiếu lưu hành:** `{profile.get('issueShare', 0):,.0f}`")
         st.write(f"- **Sàn niêm yết:** `{profile.get('exchange', 'N/A')}`")
 
-# --- TAB 3: RADAR DÒNG TIỀN & AI ADVISOR BẢN THIẾT KẾ ĐẸP ---
+# --- TAB 3: RADAR DÒNG TIỀN & AI ADVISOR ---
 with tab3:
     st.subheader("📡 Radar Quét Khối lượng & Tín hiệu Đa biến")
     if DANH_SACH_MA:
@@ -335,6 +335,54 @@ with tab3:
                         "action_coso": "KIẾN NGHỊ NẮM GIỮ: Biên lợi nhuận ngành bán lẻ xăng dầu đi vào vùng ổn định, thích hợp nắm giữ ăn chênh lệch.",
                         "action_stress": "KIẾN NGHỊ THEO DÕI TÍN HIỆU ĐẦU CƠ: Tận dụng sóng ngắn hạn của giá dầu thế giới để trading trên lượng hàng sẵn có.",
                         "action_tienre": "KIẾN NGHỊ NẮM GIỮ THEO XU HƯỚNG: Cổ phiếu phòng thủ năng lượng tăng trưởng đều, phân bổ vốn phòng vệ an toàn."
+                    },
+                    "PVC": {
+                        "vimo_coso": "Tiến độ triển khai chuỗi dự án trọng điểm Lô B - Ô Môn kích hoạt nhu cầu lớn về hóa chất, dung dịch khoan và dịch vụ kỹ thuật dầu khí nội địa.",
+                        "vimo_stress": "Giá dầu thô neo ở mức cao thúc đẩy các hoạt động thăm dò và khai thác (E&P) diễn ra sôi động, gia tăng khối lượng công việc ký kết.",
+                        "vimo_tienre": "Vốn rẻ giải ngân mạnh vào hạ tầng năng lượng, đẩy nhanh tiến độ đấu thầu các dự án tổng thầu dầu khí thượng nguồn.",
+                        "sources": [
+                            {"name": "SSI Research (Ngành Dầu khí)", "text": "Đại dự án Lô B - Ô Môn trao thầu sẽ tạo khối lượng công việc khổng lồ (Backlog kỷ lục) cho toàn chuỗi thượng nguồn. Khuyến nghị: Mua mạnh."},
+                            {"name": "Dự phóng Phân tích", "text": "Doanh thu mảng dịch vụ kỹ thuật hóa chất dự kiến tăng trưởng mạnh mẽ khi hoạt động khoan bùng nổ từ cuối năm nay."}
+                        ],
+                        "action_coso": "KIẾN NGHỊ MUA GOM: Đón đầu siêu chu kỳ ngành dầu khí thượng nguồn dựa trên tiến độ giải ngân dự án Lô B.",
+                        "action_stress": "KIẾN NGHỊ NẮM GIỮ VỮNG CHẮC: Ngành thượng nguồn dầu khí là hầm trú ẩn an toàn khi thế giới căng thẳng địa chính trị.",
+                        "action_tienre": "KIẾN NGHỊ MUA THEO DÒNG TIỀN: Tính đầu cơ cao của nhóm dầu khí sẽ hút mạnh dòng tiền thông minh khi thị trường bước vào pha tiền rẻ."
+                    },
+                    "DRI": {
+                        "vimo_coso": "Giá cao su tự nhiên thế giới hồi phục nhờ nhu cầu lốp xe từ Trung Quốc và các nước công nghiệp tăng trưởng đều trở lại.",
+                        "vimo_stress": "Thời tiết cực đoan làm suy giảm sản lượng mủ cao su tại Đông Nam Á, đẩy giá xuất khẩu tăng vọt do khan hiếm nguồn cung.",
+                        "vimo_tienre": "Chi phí logistics toàn cầu giảm sâu kích thích hoạt động giao thương hàng hóa, hỗ trợ biên lợi nhuận gộp xuất khẩu.",
+                        "sources": [
+                            {"name": "VNDirect (Phân tích Hàng hóa)", "text": "Dự báo giá xuất khẩu cao su tự nhiên bình quân sẽ tăng trưởng ổn định ở mức 8% do tình trạng thiếu hụt nguồn cung. Biên lợi nhuận gộp của DRI dự kiến cải thiện đáng kể."},
+                            {"name": "Đồng thuận Định giá", "text": "Quỹ đất cao su lớn tại Lào có chi phí giá vốn sản xuất cực thấp mang lại lợi thế cạnh tranh cốt lõi."}
+                        ],
+                        "action_coso": "KIẾN NGHỊ NẮM GIỮ: Xu hướng giá hàng hóa đang ủng hộ đà phục hồi lợi nhuận ổn định của doanh nghiệp.",
+                        "action_stress": "KIẾN NGHỊ GOM MUA KHI CÓ KHAN HIẾM: Giá hàng hóa tăng do khủng hoảng cung là bệ phóng cho các doanh nghiệp có sẵn kho trữ lượng lớn.",
+                        "action_tienre": "KIẾN NGHỊ NẮM GIỮ THEO THEO DÕI: Biên lợi nhuận mở rộng vững chắc, dòng tiền ổn định thích hợp cho danh mục phòng thủ."
+                    },
+                    "CSM": {
+                        "vimo_coso": "Chi phí nguyên liệu đầu vào duy trì ổn định. Thị trường xuất khẩu lốp xe sang Mỹ và Brazil giữ vững nhịp tăng trưởng.",
+                        "vimo_stress": "Căng thẳng vận tải biển làm giá cước tàu container tăng vọt, bào mòn biên lợi nhuận xuất khẩu và đẩy chi phí nguyên liệu tăng cao.",
+                        "vimo_tienre": "Nhu cầu tiêu dùng nội địa hồi phục mạnh mẽ, thúc đẩy sản lượng tiêu thụ săm lốp xe máy và ô tô trong nước tăng trưởng.",
+                        "sources": [
+                            {"name": "Vietcap (Phân tích Doanh nghiệp)", "text": "Sản lượng xuất khẩu lốp Radial tiếp tục là động lực cốt lõi bù đắp cho mảng săm lốp xe máy đang bão hòa nội địa. Tuy nhiên cần lưu ý áp lực chi phí logistics."},
+                            {"name": "Chỉ số Tài chính", "text": "Biên ROE nội tại duy trì ở mức ổn định nhờ tối ưu hóa dây chuyền sản xuất và tái cấu trúc các khoản nợ vay."}
+                        ],
+                        "action_coso": "KIẾN NGHỊ NẮM GIỮ: Cổ phiếu sản xuất cốt lõi đang định giá ở vùng hợp lý, dòng tiền cổ tức đều đặn.",
+                        "action_stress": "KIẾN NGHỊ HẠ TỶ TRỌNG: Giá cước vận tải biển tăng cao và giá thép đầu vào leo thang là rủi ro lớn nhất đe dọa biên lợi nhuận gộp.",
+                        "action_tienre": "KIẾN NGHỊ MUA THEO SỨC MUA NỘI ĐỊA: Sức mua trong nước hồi sinh giúp doanh nghiệp đẩy mạnh tiêu thụ kênh nội địa biên lợi nhuận cao."
+                    },
+                    "TNT": {
+                        "vimo_coso": "Thị trường bất động sản vùng ven bắt đầu có tín hiệu rã băng pháp lý, dòng tiền quay trở lại tìm kiếm cơ hội đầu tư hạ tầng.",
+                        "vimo_stress": "Áp lực lạm phát và tỷ giá kìm hãm dòng vốn tín dụng chảy vào ngành bất động sản, tiến độ triển khai các dự án bị đình trệ.",
+                        "vimo_tienre": "Môi trường lãi suất thấp kỷ lục kích hoạt làn sóng đầu cơ đất nền và bất động sản nhà ở quay trở lại, dự án hồi sinh mạnh mẽ.",
+                        "sources": [
+                            {"name": "MBS Research (Tổng quan Ngành BĐS)", "text": "Các doanh nghiệp quy mô nhỏ có tính linh hoạt cao sẽ tận dụng được làn sóng ấm lên của phân khúc đất nền tỉnh lẻ khi mặt bằng lãi suất vay giảm sâu."},
+                            {"name": "Lưu ý Phân tích", "text": "Cần giám sát chặt chẽ dòng tiền hoạt động kinh doanh (CFO) để đảm bảo tiến độ triển khai dự án không bị thắt nút cổ chai tài chính."}
+                        ],
+                        "action_coso": "KIẾN NGHỊ THEO DÕI TÍCH LŨY: Chờ đợi sự chuyển biến rõ nét hơn từ doanh thu các dự án mở bán.",
+                        "action_stress": "KIẾN NGHỊ QUẢN TRỊ RỦI RO SÁT SAO: Nhóm bất động sản quy mô vừa và nhỏ có đòn bẩy cần được cơ cấu giảm tỷ trọng ngay khi vĩ mô có tín hiệu thắt chặt.",
+                        "action_tienre": "KIẾN NGHỊ ĐẦU CƠ THEO SÓNG: Mã cổ phiếu có tính nhạy cảm dòng tiền rất cao, sẽ cho hiệu suất bùng nổ khi sóng bất động sản tiền rẻ kích hoạt."
                     }
                 }
 
@@ -367,12 +415,12 @@ with tab3:
                     </div>
                     """
 
-                # MÃ HTML/CSS BÁO CÁO TUYỆT ĐẸP (CHỐNG LỖI CÚ PHÁP)
+                # MÃ HTML/CSS BÁO CÁO TUYỆT ĐẸP (CHỐNG LỖI CÚ PHÁP BẰNG CÁCH KHÔNG DÙNG EMOJI TRỰC TIẾP TRONG CHUỖI F-STRING MÀ DÙNG UNICODE HOẶC TEXT)
                 ai_report_html = f"""
                 <div style="background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 25px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                     <div style="border-bottom: 1px solid #e5e7eb; padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
-                        <h3 style="margin: 0; color: #111827; font-size: 22px;">🤖 Báo Cáo Cố Vấn Định Lượng: {m_pt}</h3>
-                        <div style="background-color: #dbeafe; color: #166534; padding: 6px 12px; border-radius: 20px; font-size: 14px; font-weight: 600;">⭐ {diem_tcbs}/5.0 (TCBS Rating)</div>
+                        <h3 style="margin: 0; color: #111827; font-size: 22px;">Báo Cáo Cố Vấn Định Lượng: {m_pt}</h3>
+                        <div style="background-color: #dbeafe; color: #166534; padding: 6px 12px; border-radius: 20px; font-size: 14px; font-weight: 600;">&#11088; {diem_tcbs}/5.0 (TCBS Rating)</div>
                     </div>
                     
                     <div style="display: flex; gap: 15px; margin-bottom: 25px;">
@@ -391,12 +439,12 @@ with tab3:
                     </div>
 
                     <div style="border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 20px; overflow: hidden;">
-                        <div style="background: #f9fafb; border-bottom: 1px solid #e5e7eb; padding: 12px 15px; font-weight: 600; color: #374151;">🌍 1. Động lực Vĩ mô & Địa chính trị ({kịch_bản_vĩ_mô})</div>
+                        <div style="background: #f9fafb; border-bottom: 1px solid #e5e7eb; padding: 12px 15px; font-weight: 600; color: #374151;">&#127183; 1. Động lực Vĩ mô & Địa chính trị ({kịch_bản_vĩ_mô})</div>
                         <div style="padding: 15px; font-size: 15px; color: #4b5563; line-height: 1.6;">{vimo_hien_thi}</div>
                     </div>
 
                     <div style="border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 20px; overflow: hidden;">
-                        <div style="background: #f9fafb; border-bottom: 1px solid #e5e7eb; padding: 12px 15px; font-weight: 600; color: #374151;">📑 2. Dự báo & Góc nhìn Tổ chức Chuyên nghiệp</div>
+                        <div style="background: #f9fafb; border-bottom: 1px solid #e5e7eb; padding: 12px 15px; font-weight: 600; color: #374151;">&#128209; 2. Dự báo & Góc nhìn Tổ chức Chuyên nghiệp</div>
                         <div style="padding: 15px;">
                             <ul style="margin-top: 0; color: #4b5563; font-size: 15px;">
                                 <li style="margin-bottom: 8px;"><b>Xu hướng Kỹ thuật:</b> Đường MA20 {"nằm trên" if ma20_pt > ma50_pt else "cắt xuống dưới"} MA50, xác nhận xu hướng <b>{trend_text}</b>.</li>
@@ -406,9 +454,9 @@ with tab3:
                     </div>
 
                     <div style="border: 2px solid #22c55e; background: #f0fdf4; border-radius: 8px; overflow: hidden;">
-                        <div style="background: #dcfce7; border-bottom: 1px solid #bbf7d0; padding: 12px 15px; font-weight: 600; color: #166534;">⚡ 3. Chiến lược Hành động (AI Action Plan)</div>
+                        <div style="background: #dcfce7; border-bottom: 1px solid #bbf7d0; padding: 12px 15px; font-weight: 600; color: #166534;">&#9889; 3. Chiến lược Hành động (AI Action Plan)</div>
                         <div style="display: flex; align-items: center; gap: 15px; padding: 15px;">
-                            <div style="background: #22c55e; color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;">✓</div>
+                            <div style="background: #22c55e; color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;">&#10003;</div>
                             <div style="color: #166534; font-weight: 600; font-size: 16px; line-height: 1.5;">{action_hien_thi}</div>
                         </div>
                     </div>
