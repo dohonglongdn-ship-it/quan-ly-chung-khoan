@@ -2,12 +2,13 @@ import streamlit as st
 import pandas as pd
 import requests
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots # THƯ VIỆN MỚI: VẼ BIỂU ĐỒ ĐA TẦNG
 import time
 from datetime import datetime, timedelta
 
 # 1. CẤU HÌNH TRANG
 st.set_page_config(page_title="Hệ thống Cảnh báo Chứng khoán Pro", layout="wide")
-st.title("📈 Hệ thống Phân tích Chứng khoán Pro (Enterprise Engine)")
+st.title("📈 Hệ thống Phân tích Chứng khoán Pro (Giai đoạn 2: Pro-Charting)")
 
 # 2. KHU VỰC ĐIỀU KHIỂN
 st.sidebar.header("⚙️ Bảng Điều Khiển")
@@ -15,7 +16,6 @@ DANH_SACH_MA = ["TCB", "ACV", "OIL", "PVC", "DRI", "CSM", "TNT"]
 ma_chon = st.sidebar.selectbox("Chọn mã cổ phiếu phân tích chuyên sâu:", DANH_SACH_MA)
 
 # --- CƠ SỞ DỮ LIỆU NỘI BỘ (LOCAL DATA LAKE) ---
-# Chống lại mọi lệnh cấm IP bằng cách lưu trữ các hệ số tĩnh của doanh nghiệp
 LOCAL_DB = {
     "ACV": {"industry": "Vận tải Hàng không", "exchange": "UPCOM", "issueShare": 2177173236, "eps": 4850, "bvps": 23500, "roe": 0.18},
     "OIL": {"industry": "Bán lẻ Xăng dầu", "exchange": "UPCOM", "issueShare": 1034229500, "eps": 750, "bvps": 11200, "roe": 0.06},
@@ -35,7 +35,7 @@ def lay_du_lieu_bieu_do(ma):
 
     try:
         url_vnd = f"https://dchart-api.vndirect.com.vn/dchart/history?symbol={ma}&resolution=D&from={start_ts}&to={end_ts}"
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        headers = {'User-Agent': 'Mozilla/5.0'}
         res = requests.get(url_vnd, headers=headers, timeout=5)
         if res.status_code == 200:
             data = res.json()
@@ -48,7 +48,6 @@ def lay_du_lieu_bieu_do(ma):
                 return df.tail(180).reset_index(drop=True), "VNDirect DChart 🟢", ""
     except Exception:
         loi_chi_tiet.append("VNDirect lỗi mạng.")
-
     return pd.DataFrame(), "Thất bại 🔴", " | ".join(loi_chi_tiet)
 
 # --- MODULE 2: HỒ SƠ DOANH NGHIỆP TRADINGVIEW + INTERNAL DB ---
@@ -60,7 +59,6 @@ def lay_ho_so_doanh_nghiep(ma):
         'nguon_cap': 'Đang kết nối...'
     }
     
-    # 1. Thử kéo dữ liệu từ TradingView (Mỹ)
     try:
         url_tv = "https://scanner.tradingview.com/vietnam/scan"
         payload = {"symbols": {"tickers": [f"HOSE:{ma}", f"HNX:{ma}", f"UPCOM:{ma}"]},
@@ -84,7 +82,6 @@ def lay_ho_so_doanh_nghiep(ma):
     except:
         pass
 
-    # 2. KHỞI ĐỘNG DATA LAKE NỘI BỘ (Khi TradingView khuyết dữ liệu UPCOM)
     if profile['pe'] == 'N/A' or profile['issueShare'] == 0:
         if ma in LOCAL_DB:
             db = LOCAL_DB[ma]
@@ -95,7 +92,6 @@ def lay_ho_so_doanh_nghiep(ma):
             profile['eps'] = db['eps']
             profile['bvps'] = db['bvps']
             profile['nguon_cap'] = 'TradingView + CSDL Nội bộ 🟢'
-
     return profile
 
 # --- CÁC HÀM TOÁN HỌC & FORMAT ---
@@ -120,25 +116,73 @@ def format_metric(val, is_pct=False):
 # 3. GIAO DIỆN CHÍNH (3 TABS)
 tab1, tab2, tab3 = st.tabs(["📊 Biểu đồ Kỹ thuật", "🏢 Hồ sơ Doanh nghiệp", "💡 Khuyến nghị Tự động"])
 
+# TAB 1: BIỂU ĐỒ (ĐƯỢC NÂNG CẤP TOÀN DIỆN MỚI)
 with tab1:
-    st.subheader(f"Biểu đồ biến động giá - Mã: {ma_chon}")
-    with st.spinner("Đang lấy dữ liệu thời gian thực..."):
+    st.subheader(f"Trung tâm Phân tích Kỹ thuật - Mã: {ma_chon}")
+    
+    # Bảng điều khiển công cụ (Checkboxes)
+    col_t1, col_t2, col_t3, col_t4 = st.columns(4)
+    show_vol = col_t1.checkbox("📊 Bật Volume (Thanh khoản)", value=True)
+    show_ma20 = col_t2.checkbox("📈 Bật MA 20 (Ngắn hạn)", value=True)
+    show_ma50 = col_t3.checkbox("📉 Bật MA 50 (Trung hạn)", value=False)
+    show_bb = col_t4.checkbox("🌐 Bật Bollinger Bands", value=False)
+
+    with st.spinner("Đang vẽ biểu đồ kỹ thuật đa lớp..."):
         df, nguon, loi = lay_du_lieu_bieu_do(ma_chon)
         if not df.empty:
-            st.caption(f"Trạng thái kết nối: Dữ liệu được cấp bởi **{nguon}**")
-            fig = go.Figure(data=[go.Candlestick(x=df['Date'], open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name="Giá")])
-            fig.update_layout(xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=30, b=0), height=500)
+            # 1. Tính toán các chỉ báo kỹ thuật
+            df['MA20'] = df['Close'].rolling(window=20).mean()
+            df['MA50'] = df['Close'].rolling(window=50).mean()
+            df['BB_Std'] = df['Close'].rolling(window=20).std()
+            df['BB_Upper'] = df['MA20'] + (df['BB_Std'] * 2)
+            df['BB_Lower'] = df['MA20'] - (df['BB_Std'] * 2)
+
+            # 2. Khởi tạo Không gian biểu đồ (1 hoặc 2 tầng tùy chọn Volume)
+            if show_vol:
+                fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.05, 
+                                    row_heights=[0.75, 0.25], 
+                                    subplot_titles=(f"Hành động Giá ({nguon})", "Khối lượng Giao dịch"))
+            else:
+                fig = make_subplots(rows=1, cols=1)
+
+            # 3. Đổ lớp Nến Nhật (Candlestick)
+            fig.add_trace(go.Candlestick(x=df['Date'], open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name="Nến giá"), row=1, col=1)
+
+            # 4. Đổ các lớp Chỉ báo lên biểu đồ nến
+            if show_ma20:
+                fig.add_trace(go.Scatter(x=df['Date'], y=df['MA20'], mode='lines', name='MA 20', line=dict(color='#2962FF', width=1.5)), row=1, col=1)
+            if show_ma50:
+                fig.add_trace(go.Scatter(x=df['Date'], y=df['MA50'], mode='lines', name='MA 50', line=dict(color='#FF6D00', width=1.5)), row=1, col=1)
+            if show_bb:
+                fig.add_trace(go.Scatter(x=df['Date'], y=df['BB_Upper'], mode='lines', name='BB Upper', line=dict(color='gray', width=1, dash='dot')), row=1, col=1)
+                fig.add_trace(go.Scatter(x=df['Date'], y=df['BB_Lower'], mode='lines', name='BB Lower', line=dict(color='gray', width=1, dash='dot'), fill='tonexty', fillcolor='rgba(128, 128, 128, 0.1)'), row=1, col=1)
+
+            # 5. Đổ lớp Khối lượng (Volume) xuống tầng 2
+            if show_vol:
+                # Xanh nếu Giá Đóng >= Giá Mở, Đỏ nếu ngược lại
+                vol_colors = ['#26A69A' if row['Close'] >= row['Open'] else '#EF5350' for index, row in df.iterrows()]
+                fig.add_trace(go.Bar(x=df['Date'], y=df['Volume'], name='Volume', marker_color=vol_colors), row=2, col=1)
+
+            # 6. Tinh chỉnh Giao diện
+            fig.update_layout(
+                xaxis_rangeslider_visible=False, 
+                xaxis2_rangeslider_visible=False,
+                margin=dict(l=20, r=20, t=40, b=20), 
+                height=650, # Kéo dài biểu đồ ra cho dễ nhìn
+                showlegend=True,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.error("Không thể lấy dữ liệu biểu đồ.")
 
 with tab2:
     st.subheader(f"Báo cáo Tài chính Cơ bản - Mã: {ma_chon}")
-    with st.spinner("Đang đồng bộ Dữ liệu thời gian thực và CSDL Nội bộ..."):
+    with st.spinner("Đang đồng bộ Dữ liệu..."):
         profile = lay_ho_so_doanh_nghiep(ma_chon)
         st.caption(f"Nguồn cấp dữ liệu: **{profile.get('nguon_cap')}**")
         
-        # TÍNH TOÁN ĐỘNG (DYNAMIC CALCULATION)
         pe_hien_thi = profile.get('pe')
         pb_hien_thi = profile.get('pb')
         von_hoa_ty = profile.get('marketCap', 0) / 1_000_000_000
@@ -148,14 +192,11 @@ with tab2:
         if 'df' in locals() and not df.empty:
             gia_hien_tai = df['Close'].iloc[-1]
             klgd_20 = df['Volume'].tail(20).mean()
-            
-            # Kích hoạt trí tuệ nhân tạo: Tự tính toán dựa trên giá thực tế và CSDL
             if profile.get('nguon_cap') == 'TradingView + CSDL Nội bộ 🟢' and gia_hien_tai > 0:
                 if profile['eps'] > 0: pe_hien_thi = gia_hien_tai / profile['eps']
                 if profile['bvps'] > 0: pb_hien_thi = gia_hien_tai / profile['bvps']
                 von_hoa_ty = (gia_hien_tai * profile['issueShare']) / 1_000_000_000
 
-        # HIỂN THỊ
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Ngành nghề", str(profile.get('industry', 'N/A')))
         col2.metric("P/E (Định giá)", format_metric(pe_hien_thi))
