@@ -9,11 +9,13 @@ import os
 import json 
 from datetime import datetime, timedelta
 
-# 1. CẤU HÌNH TRANG
+# ==========================================
+# 1. CẤU HÌNH HỆ THỐNG & GIAO DIỆN
+# ==========================================
 st.set_page_config(page_title="Hệ thống Phân tích & Quản trị Chứng khoán Pro", layout="wide")
 st.title("📈 Hệ thống Phân tích & Quản trị Chứng khoán Pro (Institutional Terminal)")
 
-# --- CƠ SỞ DỮ LIỆU NỘI BỘ VỀ DOANH NGHIỆP (DATA LAKE) ---
+# CƠ SỞ DỮ LIỆU NỘI BỘ VỀ DOANH NGHIỆP (DATA LAKE)
 LOCAL_DB = {
     "ACV": {"name": "Tổng công ty Cảng hàng không VN", "industry": "Vận tải Hàng không", "exchange": "UPCOM", "issueShare": 2177173236, "eps": 4850, "bvps": 23500, "roe": 0.18},
     "OIL": {"name": "Tổng công ty Dầu Việt Nam", "industry": "Bán lẻ Xăng dầu", "exchange": "UPCOM", "issueShare": 1034229500, "eps": 750, "bvps": 11200, "roe": 0.06},
@@ -24,7 +26,7 @@ LOCAL_DB = {
     "TCB": {"name": "Ngân hàng Kỹ thương Việt Nam", "industry": "Ngân hàng", "exchange": "HOSE", "issueShare": 7086240000, "eps": 3690, "bvps": 24000, "roe": 0.15}
 }
 
-# --- BỘ LƯU TRỮ VĨNH VIỄN ---
+# BỘ LƯU TRỮ DANH MỤC VĨNH VIỄN
 FILE_BO_NHU = "portfolio_storage.json"
 
 def tai_danh_muc_tu_o_cung():
@@ -42,7 +44,6 @@ def luu_danh_muc_vao_o_cung(du_lieu):
 DANH_MỤC_LIVE = tai_danh_muc_tu_o_cung()
 DANH_SACH_MA = list(DANH_MỤC_LIVE.keys())
 
-# 2. KHU VỰC ĐIỀU KHIỂN SIDEBAR
 st.sidebar.header("🔍 Phân tích Chuyên sâu")
 if not DANH_SACH_MA:
     st.sidebar.warning("⚠️ Bảng giá trống. Hãy sang Tab 'Bảng Giá' để thêm mã!")
@@ -50,7 +51,9 @@ if not DANH_SACH_MA:
 else:
     ma_chon = st.sidebar.selectbox("Chọn mã xem Biểu đồ & Hồ sơ:", DANH_SACH_MA)
 
-# --- MODULE 1: KẾT NỐI BIỂU ĐỒ LIVE ---
+# ==========================================
+# 2. CÁC MODULE KẾT NỐI API & TÍNH TOÁN
+# ==========================================
 @st.cache_data(ttl=900, show_spinner=False)
 def lay_du_lieu_bieu_do(ma):
     if not ma: return pd.DataFrame(), "Không có mã", ""
@@ -68,7 +71,6 @@ def lay_du_lieu_bieu_do(ma):
     except: pass
     return pd.DataFrame(), "Thất bại 🔴", ""
 
-# --- MODULE 2: HỒ SƠ DOANH NGHIỆP ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def lay_ho_so_doanh_nghiep(ma):
     if not ma: return {}
@@ -97,7 +99,6 @@ def lay_ho_so_doanh_nghiep(ma):
             profile.update({'industry': db['industry'], 'exchange': db['exchange'], 'issueShare': db['issueShare'], 'roe': db['roe'], 'eps': db['eps'], 'bvps': db['bvps'], 'nguon_cap': 'TradingView + CSDL Nội bộ 🟢'})
     return profile
 
-# --- MODULE 3: ĐÁNH GIÁ TỪ API TCBS ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def lay_danh_gia_tcbs(ma):
     try:
@@ -107,7 +108,6 @@ def lay_danh_gia_tcbs(ma):
     except: pass
     return 0
 
-# --- TOÁN HỌC & ĐỊNH DẠNG ---
 def tinh_rsi(series, period=14):
     delta = series.diff(); up = delta.clip(lower=0); down = -1 * delta.clip(upper=0)
     ema_up = up.ewm(com=period-1, adjust=False).mean(); ema_down = down.ewm(com=period-1, adjust=False).mean()
@@ -125,8 +125,10 @@ def format_metric(val, is_pct=False):
         return f"{v:.2f}"
     except: return "N/A"
 
-# 3. GIAO DIỆN CHÍNH (5 TABS CHUYÊN NGHIỆP)
-tab0, tab1, tab2, tab3, tab4 = st.tabs(["🖥️ Bảng Giá Điện Tử", "📊 Biểu đồ Kỹ thuật", "🏢 Hồ sơ Doanh nghiệp", "📡 Bộ lọc & Cố vấn Vĩ mô", "💼 Quản lý Danh mục"])
+# ==========================================
+# 3. GIAO DIỆN CHÍNH (5 TABS)
+# ==========================================
+tab0, tab1, tab2, tab3, tab4 = st.tabs(["🖥️ Bảng Giá Điện Tử", "📊 Biểu đồ Kỹ thuật", "🏢 Hồ sơ Doanh nghiệp", "📡 Bộ lọc & AI Advisor", "💼 Quản lý Danh mục"])
 
 # --- TAB 0: BẢNG GIÁ ĐIỆN TỬ ---
 with tab0:
@@ -161,7 +163,7 @@ with tab0:
         else: html_c += "<tr><td colspan='11' style='text-align:center;'>Danh mục Watchlist trống. Vui lòng thêm mã.</td></tr>"
     html_c += "</table></div>"; st.markdown(html_c, unsafe_allow_html=True)
 
-# --- TAB 1: BIỂU ĐỒ KỸ THUẬT KÈM XUẤT CSV ---
+# --- TAB 1: BIỂU ĐỒ KỸ THUẬT ---
 with tab1:
     if ma_chon:
         st.subheader(f"Trung tâm Phân tích Kỹ thuật - Mã: {ma_chon}")
@@ -196,7 +198,7 @@ with tab1:
             csv_price = df.to_csv(index=False).encode('utf-8')
             st.download_button(label="📥 Tải lịch sử giá 180 phiên (CSV)", data=csv_price, file_name=f"lich_su_gia_{ma_chon}.csv", mime="text/csv")
 
-# --- TAB 2: HỒ SƠ DOANH NGHIỆP ĐẦY ĐỦ ---
+# --- TAB 2: HỒ SƠ DOANH NGHIỆP ---
 with tab2:
     if ma_chon:
         st.subheader(f"Hồ sơ Doanh nghiệp & Chỉ số Cơ bản - Mã: {ma_chon}")
@@ -230,7 +232,7 @@ with tab2:
         st.write(f"- **Khối lượng cổ phiếu lưu hành:** `{profile.get('issueShare', 0):,.0f}`")
         st.write(f"- **Sàn niêm yết:** `{profile.get('exchange', 'N/A')}`")
 
-# --- TAB 3: RADAR DÒNG TIỀN & AI ADVISOR TÍCH HỢP DỰ BÁO VĨ MÔ + TRÍCH DẪN NGUỒN ---
+# --- TAB 3: RADAR DÒNG TIỀN & AI ADVISOR BẢN THIẾT KẾ ĐẸP ---
 with tab3:
     st.subheader("📡 Radar Quét Khối lượng & Tín hiệu Đa biến")
     if DANH_SACH_MA:
@@ -272,9 +274,8 @@ with tab3:
                 st.download_button(label="📥 Tải báo cáo Quét Radar Dòng tiền (CSV)", data=csv_radar, file_name="bao_cao_radar_live.csv", mime="text/csv")
 
     st.markdown("---")
-    st.subheader("🤖 Hệ thống Mô phỏng Vĩ mô & Cố vấn Định lượng (AI Advisor Enterprise)")
+    st.subheader("🤖 Hệ thống Cố vấn Đầu tư Chuyên nghiệp (AI Advisor Enterprise)")
     
-    # 2 Bảng điều khiển tương tác động cho Cố vấn Vĩ mô
     col_advisor1, col_advisor2 = st.columns(2)
     with col_advisor1:
         m_pt = st.selectbox("1. Chọn mã cổ phiếu cần nội soi:", ["-- Chọn mã cổ phiếu --"] + DANH_SACH_MA, key="advisor_stock_select")
@@ -282,7 +283,7 @@ with tab3:
         kịch_bản_vĩ_mô = st.radio("2. Giả lập kịch bản vĩ mô toàn cầu:", ["Cơ sở (Ổn định & Phục hồi)", "Căng thẳng Địa chính trị leo thang", "Nới lỏng Tiền tệ mạnh mẽ (Tiền rẻ)"], horizontal=True)
 
     if m_pt != "-- Chọn mã cổ phiếu --":
-        with st.spinner(f"AI đang trích xuất kho dữ liệu vĩ mô và nguồn dự báo chuyên gia cho {m_pt}..."):
+        with st.spinner(f"AI đang trích xuất dữ liệu và biên soạn báo cáo chuẩn cho {m_pt}..."):
             df_pt, _, _ = lay_du_lieu_bieu_do(m_pt)
             if not df_pt.empty and len(df_pt) >= 50:
                 df_pt['RSI'] = tinh_rsi(df_pt['Close'])
@@ -295,106 +296,125 @@ with tab3:
                 macd_cur = macd_pt.iloc[-1]
                 sig_cur = signal_pt.iloc[-1]
                 
-                # Gọi điểm xếp hạng từ API thực tế của TCBS
                 diem_tcbs = lay_danh_gia_tcbs(m_pt)
-                danh_gia_api = f"⭐ **{diem_tcbs}/5.0 Điểm** (Hệ thống Xếp hạng Động mạng lưới TCBS API)" if diem_tcbs > 0 else "Đang cập nhật luồng điểm rating."
                 
-                # --- THUẬT TOÁN KHO DỮ LIỆU CỐ VẤN KÈM TRÍCH DẪN NGUỒN TỔ CHỨC ---
+                # CƠ SỞ DỮ LIỆU CỐ VẤN DẠNG CẤU TRÚC (STRUCTURED DATA)
                 DỮ_LIỆU_VĨ_MÔ = {
                     "TCB": {
                         "vimo_coso": "Chu kỳ phục hồi của thị trường Bất động sản trong nước và việc tháo gỡ pháp lý giúp giảm áp lực nợ xấu. Lãi suất huy động duy trì ở mức thấp giúp tối ưu hóa chi phí vốn (COF).",
                         "vimo_stress": "Địa chính trị căng thẳng đẩy lạm phát nhập khẩu tăng, buộc Ngân hàng Nhà nước phải thắt chặt thanh khoản để bảo vệ tỷ giá. Rủi ro nợ xấu hệ thống gia tăng.",
                         "vimo_tienre": "Hạ lãi suất điều hành mạnh mẽ thúc đẩy tăng trưởng tín dụng bùng nổ. Dòng tiền nhàn rỗi chảy mạnh từ tiết kiệm sang các kênh tài sản và tiêu dùng.",
-                        "du_bao_nguon": "\n* **SSI Research (Báo cáo Chiến lược Ngành):** Dự báo tăng trưởng tín dụng của TCB tiếp tục dẫn đầu toàn ngành nhờ lợi thế tệp khách hàng lớn và hệ sinh thái bất động sản. Biên lãi ròng (NIM) dự phóng hồi phục mạnh về mức **4.2%**. Khuyến nghị: *Khả quan*.\n* **Vietcap (Báo cáo Phân tích Doanh nghiệp):** Dự phóng Lợi nhuận trước thuế tăng trưởng **12% - 15%** so với cùng kỳ nhờ chiến lược số hóa mạnh mẽ giúp tăng tỷ lệ tiền gửi không kỳ hạn (CASA) và giảm thiểu rủi ro tập trung bằng cách mở rộng sang phân khúc SME và Bán lẻ.",
-                        "action_coso": "✅ **KIẾN NGHỊ NẮM GIỮ / MUA TÍCH LŨY:** Phù hợp gom mua rải lệnh khi có nhịp điều chỉnh kỹ thuật, nắm giữ cho mục tiêu trung hạn.",
-                        "action_stress": "⚠️ **KIẾN NGHỊ PHÒNG VỆ RỦI RO:** Hạ tỷ trọng danh mục margin, ưu tiên quản trị rủi ro thanh khoản vì ngành ngân hàng nhạy cảm cao với biến động lãi suất vĩ mô.",
-                        "action_tienre": "🚀 **KIẾN NGHỊ MUA MẠNH:** Cổ phiếu dòng ngân hàng thương mại năng động sẽ là đầu tàu hút dòng tiền đầu cơ khi thanh khoản thị trường bùng nổ."
+                        "sources": [
+                            {"name": "SSI Research (Chiến lược Ngành)", "text": "Dự báo tăng trưởng tín dụng của TCB tiếp tục dẫn đầu toàn ngành nhờ lợi thế tệp khách hàng lớn và hệ sinh thái bất động sản. Biên lãi ròng (NIM) dự phóng hồi phục mạnh về mức 4.2%. Khuyến nghị: Khả quan."},
+                            {"name": "Vietcap (Phân tích Doanh nghiệp)", "text": "Dự phóng Lợi nhuận trước thuế tăng trưởng 12% - 15% so với cùng kỳ nhờ chiến lược số hóa mạnh mẽ giúp tăng tỷ lệ tiền gửi không kỳ hạn (CASA) và giảm thiểu rủi ro tập trung bằng cách mở rộng sang phân khúc SME."}
+                        ],
+                        "action_coso": "KIẾN NGHỊ NẮM GIỮ / MUA TÍCH LŨY: Phù hợp gom mua rải lệnh khi có nhịp điều chỉnh kỹ thuật, nắm giữ cho mục tiêu trung hạn.",
+                        "action_stress": "KIẾN NGHỊ PHÒNG VỆ RỦI RO: Hạ tỷ trọng danh mục margin, ưu tiên quản trị rủi ro thanh khoản vì ngành ngân hàng nhạy cảm cao với biến động lãi suất.",
+                        "action_tienre": "KIẾN NGHỊ MUA MẠNH: Cổ phiếu dòng ngân hàng thương mại năng động sẽ là đầu tàu hút dòng tiền đầu cơ khi thanh khoản thị trường bùng nổ."
                     },
                     "ACV": {
-                        "vimo_coso": "Sản lượng hành khách quốc tế hồi phục vững chắc. Tiến độ giải ngân và thi công Siêu dự án Sân bay Long Thành Giai đoạn 1 diễn biến tích cực, tạo động lực quy mô dài hạn.",
-                        "vimo_stress": "Giá dầu Brent leo thang đẩy chi phí nhiên liệu bay của các hãng hàng không tăng vọt, làm sụt giảm nhu cầu du lịch toàn cầu và tần suất chuyến bay quốc tế.",
-                        "vimo_tienre": "Dòng tiền rẻ kích thích tiêu dùng và du lịch quốc tế bùng nổ, gia tăng nguồn thu từ dịch vụ hàng không và phi hàng không tại các cảng lớn.",
-                        "du_bao_nguon": "\n* **VNDirect Research (Báo cáo Ngành Hạ tầng):** Khẳng định tiến độ bàn giao Sân bay Long Thành đúng kế hoạch sẽ là động lực tăng trưởng cốt lõi nhảy vọt về công suất phục vụ từ cuối năm 2026. Khuyến nghị: *Mua* với giá mục tiêu kỳ vọng định giá lại quy mô tài sản.\n* **MBS Research (Báo cáo Định giá Định kỳ):** Dự báo nguồn thu USD từ phí phục vụ hành khách quốc tế tăng trưởng **18%**, tạo dòng tiền phòng vệ tự nhiên cực tốt giúp ACV giảm thiểu rủi ro tỷ giá đối với các khoản vay ODA bằng đồng Yên Nhật (JPY).",
-                        "action_coso": "✅ **KIẾN NGHỊ NẮM GIỮ DÀI HẠN:** ACV sở hữu vị thế độc quyền hạ tầng hàng không bất khả xâm phạm, thích hợp tích sản dài hạn.",
-                        "action_stress": "🟡 **KIẾN NGHỊ THEO DÕI SÁT GIÁ DẦU:** Không mua đuổi, giữ tỷ trọng tiền mặt an toàn chờ đợi các báo cáo sản lượng khách bay theo tháng.",
-                        "action_tienre": "🚀 **KIẾN NGHỊ GOM MUA MẠNH:** Giá trị tài sản và dòng tiền độc quyền định giá lại cực mạnh khi lãi suất chiết khấu dòng tiền sụt giảm sâu."
+                        "vimo_coso": "Sản lượng hành khách quốc tế hồi phục vững chắc. Tiến độ giải ngân thi công Sân bay Long Thành diễn biến tích cực, tạo động lực quy mô dài hạn.",
+                        "vimo_stress": "Giá dầu Brent leo thang đẩy chi phí nhiên liệu bay tăng vọt, làm sụt giảm nhu cầu du lịch toàn cầu và tần suất chuyến bay.",
+                        "vimo_tienre": "Dòng tiền rẻ kích thích tiêu dùng và du lịch bùng nổ, gia tăng nguồn thu từ dịch vụ hàng không và phi hàng không tại các cảng lớn.",
+                        "sources": [
+                            {"name": "VNDirect Research (Ngành Hạ tầng)", "text": "Tiến độ bàn giao Sân bay Long Thành đúng kế hoạch sẽ là động lực tăng trưởng cốt lõi nhảy vọt về công suất phục vụ từ cuối 2026. Khuyến nghị: Mua."},
+                            {"name": "MBS Research (Định giá)", "text": "Nguồn thu USD từ phí hành khách quốc tế tăng trưởng 18%, tạo dòng tiền phòng vệ tự nhiên cực tốt giúp ACV giảm rủi ro tỷ giá JPY."}
+                        ],
+                        "action_coso": "KIẾN NGHỊ NẮM GIỮ DÀI HẠN: ACV sở hữu vị thế độc quyền hạ tầng hàng không bất khả xâm phạm, thích hợp tích sản.",
+                        "action_stress": "KIẾN NGHỊ THEO DÕI SÁT GIÁ DẦU: Không mua đuổi, giữ tỷ trọng tiền mặt an toàn chờ đợi báo cáo sản lượng khách bay.",
+                        "action_tienre": "KIẾN NGHỊ GOM MUA MẠNH: Giá trị tài sản và dòng tiền định giá lại cực mạnh khi lãi suất chiết khấu sụt giảm sâu."
                     },
                     "OIL": {
-                        "vimo_coso": "Nhu cầu tiêu thụ xăng dầu nội địa tăng trưởng ổn định theo GDP. Cơ chế điều hành giá mới sát với biến động thị trường giúp doanh nghiệp giảm độ trễ trích lập.",
-                        "vimo_stress": "Xung đột vũ trang đẩy giá dầu thô Brent vượt ngưỡng rủi ro, gây áp lực lên chi phí nhập khẩu nhưng mang lại khoản lợi nhuận chênh lệch hàng tồn kho (Inventory Gain) lớn trong ngắn hạn.",
-                        "vimo_tienre": "Kinh tế tăng trưởng nóng đẩy nhu cầu vận tải và tiêu thụ năng lượng tăng vọt, cải thiện mạnh mẽ sản lượng sản xuất và bán lẻ.",
-                        "du_bao_nguon": "\n* **HSC Research (Báo cáo Phân tích Ngành Năng lượng):** Dự báo cơ chế điều hành giá xăng dầu mới của Chính phủ sẽ giúp các doanh nghiệp đầu mối bán lẻ lớn như OIL và PLX tối ưu hóa biên lợi nhuận gộp, giảm bớt rủi ro trích lập hàng tồn kho khi giá dầu thế giới biến động phức tạp.\n* **Dự phóng Đồng thuận (Consensus):** Sản lượng tiêu thụ kênh bán lẻ dự kiến tăng trưởng **5.5%** nhờ mở rộng chuỗi trạm xăng trên các trục cao tốc trọng điểm vừa hoàn thành trong nước.",
-                        "action_coso": "⚖️ **KIẾN NGHỊ NẮM GIỮ:** Biên lợi nhuận ngành bán lẻ xăng dầu đi vào vùng ổn định, thích hợp nắm giữ ăn chênh lệch dòng tiền.",
-                        "action_stress": "🟢 **KIẾN NGHỊ THEO DÕI TÍN HIỆU ĐẦU CƠ GIÁ DẦU:** Có thể tận dụng các sóng ngắn hạn của giá dầu thế giới để trading trên lượng hàng sẵn có.",
-                        "action_tienre": "🟡 **KIẾN NGHỊ NẮM GIỮ THEO XU HƯỚNG:** Cổ phiếu phòng thủ năng lượng tăng trưởng đều, phân bổ một phần vốn phòng vệ."
-                    },
-                    "PVC": {
-                        "vimo_coso": "Tiến độ triển khai chuỗi dự án trọng điểm Lô B - Ô Môn kích hoạt nhu cầu lớn về hóa chất, dung dịch khoan và dịch vụ kỹ thuật dầu khí nội địa.",
-                        "vimo_stress": "Giá dầu thô neo ở mức cao thúc đẩy các hoạt động thăm dò và khai thác (E&P) diễn ra sôi động, gia tăng khối lượng công việc ký kết.",
-                        "vimo_tienre": "Vốn rẻ giải ngân mạnh vào hạ tầng năng lượng, đẩy nhanh tiến độ đấu thầu các dự án tổng thầu dầu khí thượng nguồn.",
-                        "du_bao_nguon": "\n* **SSI Research (Báo cáo Cập nhật Ngành Dầu khí):** Đánh giá việc đại dự án Lô B - Ô Môn chính thức trao thầu các gói thầu lớn sẽ tạo khối lượng công việc khổng lồ (Backlog kỷ lục) cho toàn chuỗi thượng nguồn (bao gồm PVS, PVD, PVC). Khuyến nghị: *Mua mạnh* cho chu kỳ đầu tư năng lượng mới.\n* **Dự phóng Phân tích:** Doanh thu mảng dịch vụ kỹ thuật hóa chất cốt lõi dự kiến tăng trưởng mạnh mẽ khi hoạt động khoan bùng nổ từ cuối năm nay.",
-                        "action_coso": "🚀 **KIẾN NGHỊ MUA GOM:** Đón đầu siêu chu kỳ ngành dầu khí thượng nguồn dựa trên tiến độ giải ngân dự án Lô B.",
-                        "action_stress": "✅ **KIẾN NGHỊ NẮM GIỮ VỮNG CHẮC:** Ngành thượng nguồn dầu khí là hầm trú ẩn an toàn khi thế giới căng thẳng địa chính trị và lạm phát năng lượng.",
-                        "action_tienre": "🚀 **KIẾN NGHỊ MUA THEO DÒNG TIỀN:** Tính đầu cơ cao của nhóm dầu khí sẽ hút mạnh dòng tiền thông minh khi thị trường bước vào pha tiền rẻ."
-                    },
-                    "DRI": {
-                        "vimo_coso": "Giá cao su tự nhiên thế giới hồi phục nhờ nhu cầu lốp xe từ Trung Quốc và các nước công nghiệp tăng trưởng đều trở lại.",
-                        "vimo_stress": "Hiện tượng thời tiết cực đoan (El Nino/La Nina) làm suy giảm sản lượng mủ cao su tại Đông Nam Á, đẩy giá xuất khẩu tăng vọt do khan hiếm nguồn cung.",
-                        "vimo_tienre": "Chi phí logistics toàn cầu giảm sâu kích thích hoạt động giao thương hàng hóa, hỗ trợ biên lợi nhuận gộp xuất khẩu.",
-                        "du_bao_nguon": "\n* **VNDirect (Báo cáo Phân tích Hàng hóa):** Dự báo giá xuất khẩu cao su tự nhiên bình quân sẽ tăng trưởng ổn định ở mức **8%** do tình trạng thiếu hụt nguồn cung mủ tự nhiên kéo dài tại Thái Lan và Indonesia. Biên lợi nhuận gộp của DRI dự kiến cải thiện đáng kể.\n* **Đồng thuận Định giá:** Định giá tài sản ròng dựa trên quỹ đất cao su lớn tại Lào có chi phí giá vốn sản xuất cực thấp mang lại lợi thế cạnh tranh lớn cho doanh nghiệp.",
-                        "action_coso": "✅ **KIẾN NGHỊ NẮM GIỮ:** Xu hướng giá hàng hóa đang ủng hộ đà phục hồi lợi nhuận ổn định của doanh nghiệp.",
-                        "action_stress": "🟢 **KIẾN NGHỊ GOM MUA KHI CÓ KHAN HIẾM:** Giá hàng hóa tăng do khủng hoảng cung là bệ phóng cho các doanh nghiệp có sẵn kho trữ lượng lớn.",
-                        "action_tienre": "⚖️ **KIẾN NGHỊ NẮM GIỮ THEO THEO DÕI:** Biên lợi nhuận mở rộng vững chắc, dòng tiền ổn định thích hợp cho danh mục phòng thủ."
-                    },
-                    "CSM": {
-                        "vimo_coso": "Chi phí nguyên liệu đầu vào (cao su, thép cord, than đen) duy trì ổn định. Thị trường xuất khẩu lốp xe sang Mỹ và Brazil giữ vững nhịp tăng trưởng.",
-                        "vimo_stress": "Căng thẳng vận tải biển làm giá cước tàu container tăng vọt, bào mòn biên lợi nhuận xuất khẩu và đẩy chi phí nguyên liệu thép LME tăng cao.",
-                        "vimo_tienre": "Nhu cầu tiêu dùng nội địa hồi phục mạnh mẽ, thúc đẩy sản lượng tiêu thụ săm lốp xe máy và ô tô trong nước tăng trưởng.",
-                        "du_bao_nguon": "\n* **Vietcap (Báo cáo Phân tích Doanh nghiệp Sản xuất):** Đánh giá sản lượng xuất khẩu lốp Radial sang thị trường Mỹ tiếp tục là động lực cốt lõi bù đắp cho mảng săm lốp xe máy đang bão hòa nội địa. Tuy nhiên, cần lưu ý áp lực từ chi phí logistics quốc tế biến động.\n* **Chỉ số Tài chính:** Biên ROE nội tại duy trì ở mức ổn định nhờ tối ưu hóa dây chuyền sản xuất và tái cấu trúc các khoản nợ vay.",
-                        "action_coso": "⚖️ **KIẾN NGHỊ NẮM GIỮ:** Cổ phiếu sản xuất cốt lõi đang định giá ở vùng hợp lý, dòng tiền cổ tức đều đặn.",
-                        "action_stress": "🔴 **KIẾN NGHỊ HẠ TỶ TRỌNG:** Giá cước vận tải biển tăng cao và giá thép đầu vào leo thang là rủi ro lớn nhất đe dọa biên lợi nhuận gộp.",
-                        "action_tienre": "🟢 **KIẾN NGHỊ MUA THEO SỨC MUA NỘI ĐỊA:** Sức mua trong nước hồi sinh giúp doanh nghiệp đẩy mạnh tiêu thụ kênh nội địa biên lợi nhuận cao."
-                    },
-                    "TNT": {
-                        "vimo_coso": "Thị trường bất động sản vùng ven bắt đầu có tín hiệu rã băng pháp lý, dòng tiền quay trở lại tìm kiếm cơ hội đầu tư hạ tầng.",
-                        "vimo_stress": "Áp lực lạm phát và tỷ giá kìm hãm dòng vốn tín dụng chảy vào ngành bất động sản, tiến độ triển khai các dự án bị đình trệ.",
-                        "vimo_tienre": "Môi trường lãi suất thấp kỷ lục kích hoạt làn sóng đầu cơ đất nền và bất động sản nhà ở quay trở lại, dự án hồi sinh mạnh mẽ.",
-                        "du_bao_nguon": "\n* **MBS Research (Báo cáo Tổng quan Ngành Bất động sản):** Nhận định các doanh nghiệp quy mô nhỏ có tính linh hoạt cao sẽ tận dụng được làn sóng ấm lên của phân khúc đất nền tỉnh lẻ khi mặt bằng lãi suất vay mua nhà giảm sâu.\n* **Lưu ý Phân tích:** Cần giám sát chặt chẽ dòng tiền hoạt động kinh doanh (CFO) để đảm bảo tiến độ triển khai dự án không bị thắt nút cổ chai tài chính.",
-                        "action_coso": "🟡 **KIẾN NGHỊ THEO DÕI TÍCH LŨY:** Chờ đợi sự chuyển biến rõ nét hơn từ doanh thu các dự án mở bán.",
-                        "action_stress": "🔴 **KIẾN NGHỊ QUẢN TRỊ RỦI RO SÁT SAO:** Nhóm bất động sản quy mô vừa và nhỏ có đòn bẩy cần được cơ cấu giảm tỷ trọng ngay khi vĩ mô có tín hiệu thắt chặt.",
-                        "action_tienre": "🚀 **KIẾN NGHỊ ĐẦU CƠ THEO SÓNG:** Mã cổ phiếu có tính nhạy cảm dòng tiền rất cao, sẽ cho hiệu suất bùng nổ khi sóng bất động sản tiền rẻ kích hoạt."
+                        "vimo_coso": "Cơ chế điều hành giá mới sát với biến động thị trường giúp doanh nghiệp giảm độ trễ trích lập, tối ưu biên lợi nhuận.",
+                        "vimo_stress": "Giá dầu thô Brent neo cao gây áp lực chi phí nhập khẩu nhưng mang lại khoản lợi nhuận chênh lệch hàng tồn kho (Inventory Gain) lớn.",
+                        "vimo_tienre": "Kinh tế tăng trưởng nóng đẩy nhu cầu vận tải và tiêu thụ năng lượng tăng vọt, cải thiện sản lượng bán lẻ.",
+                        "sources": [
+                            {"name": "HSC Research (Ngành Năng lượng)", "text": "Cơ chế điều hành giá xăng dầu mới giúp OIL tối ưu hóa biên lợi nhuận gộp, giảm rủi ro trích lập hàng tồn kho."},
+                            {"name": "Dự phóng Đồng thuận", "text": "Sản lượng tiêu thụ kênh bán lẻ dự kiến tăng trưởng 5.5% nhờ mở rộng chuỗi trạm xăng trên các trục cao tốc trọng điểm."}
+                        ],
+                        "action_coso": "KIẾN NGHỊ NẮM GIỮ: Biên lợi nhuận ngành bán lẻ xăng dầu đi vào vùng ổn định, thích hợp nắm giữ ăn chênh lệch.",
+                        "action_stress": "KIẾN NGHỊ THEO DÕI TÍN HIỆU ĐẦU CƠ: Tận dụng sóng ngắn hạn của giá dầu thế giới để trading trên lượng hàng sẵn có.",
+                        "action_tienre": "KIẾN NGHỊ NẮM GIỮ THEO XU HƯỚNG: Cổ phiếu phòng thủ năng lượng tăng trưởng đều, phân bổ vốn phòng vệ an toàn."
                     }
                 }
 
-                # Lấy dữ liệu phân tích động theo kịch bản và mã cổ phiếu
+                # Lấy dữ liệu an toàn
                 data_m = DỮ_LIỆU_VĨ_MÔ.get(m_pt, {
-                    "vimo_coso": "Hệ thống đang cập nhật dữ liệu vĩ mô dòng tiền riêng cho mã này.", "vimo_stress": "Hệ thống đang rà soát kịch bản căng thẳng.", "vimo_tienre": "Đang tính toán kịch bản nới lỏng.",
-                    "du_bao_nguon": "\n* Dữ liệu dự báo đồng thuận từ các định chế tài chính đang được tổng hợp và cập nhật trực tiếp.",
-                    "action_coso": "⚖️ KIẾN NGHỊ THEO DÕI", "action_stress": "⚖️ KIẾN NGHỊ THEO DÕI", "action_tienre": "⚖️ KIẾN NGHỊ THEO DÕI"
+                    "vimo_coso": "Hệ thống đang cập nhật dữ liệu vĩ mô cho mã này.", "vimo_stress": "Đang rà soát kịch bản căng thẳng.", "vimo_tienre": "Đang tính toán kịch bản nới lỏng.",
+                    "sources": [{"name": "Cập nhật dữ liệu", "text": "Hệ thống đang chờ đồng bộ báo cáo mới nhất từ các quỹ đầu tư."}],
+                    "action_coso": "THEO DÕI SÁT DIỄN BIẾN THỊ TRƯỜNG.", "action_stress": "THEO DÕI SÁT DIỄN BIẾN THỊ TRƯỜNG.", "action_tienre": "THEO DÕI SÁT DIỄN BIẾN THỊ TRƯỜNG."
                 })
 
-                if kịch_bản_vĩ_mô == "Cơ sở (Ổn định & Phục hồi)":
-                    vimo_hien_thi = data_m["vimo_coso"]; action_hien_thi = data_m["action_coso"]
-                elif kịch_bản_vĩ_mô == "Căng thẳng Địa chính trị leo thang":
-                    vimo_hien_thi = data_m["vimo_stress"]; action_hien_thi = data_m["action_stress"]
-                else:
-                    vimo_hien_thi = data_m["vimo_tienre"]; action_hien_thi = data_m["action_tienre"]
+                if "Cơ sở" in kịch_bản_vĩ_mô: vimo_hien_thi = data_m["vimo_coso"]; action_hien_thi = data_m["action_coso"]
+                elif "Căng thẳng" in kịch_bản_vĩ_mô: vimo_hien_thi = data_m["vimo_stress"]; action_hien_thi = data_m["action_stress"]
+                else: vimo_hien_thi = data_m["vimo_tienre"]; action_hien_thi = data_m["action_tienre"]
 
-                # IN BÁO CÁO RA GIAO DIỆN CHUẨN MARKDOWN
-                st.info(f"""
-                ### 📊 Báo Cáo Chiến Lược & Dự Báo Định Lượng: {m_pt}
-                * **Thị giá Khớp lệnh Hiện tại:** `{gia_pt:,.0f} VNĐ` | **Động lượng Động:** `RSI = {rsi_pt:.2f}`
-                * **Xếp hạng Hệ thống:** {danh_gia_api}
+                # Logic lập luận Kỹ thuật & Cơ bản
+                if rsi_pt < 30: rsi_text = "Vùng Quá Bán (Bị bán tháo, cơ hội bắt đáy)"
+                elif rsi_pt > 70: rsi_text = "Vùng Quá Mua (Tăng nóng, rủi ro chỉnh giá)"
+                else: rsi_text = "Vùng Tích lũy (Động lượng cân bằng)"
                 
-                #### 🌍 1. Động lực Vĩ mô & Địa chính trị (Theo Kịch bản chọn)
-                > *{vimo_hien_thi}*
-                
-                #### 📑 2. Dự báo tăng trưởng & Định giá (Trích dẫn Nguồn Định chế Tài chính)
-                {data_m["du_bao_nguon"]}
-                
-                #### 💡 3. Chiến lược Hành động Định lượng (AI Action Plan)
-                > **{action_hien_thi}**
-                """)
+                macd_text = "Mua (Cắt lên Signal)" if macd_cur > sig_cur else "Suy yếu (Cắt xuống Signal)"
+                trend_text = "Tăng (Uptrend)" if ma20_pt > ma50_pt else "Giảm/Tích lũy (Downtrend)"
+
+                # Xây dựng HTML Sources
+                sources_html = ""
+                for src in data_m["sources"]:
+                    sources_html += f"""
+                    <div style="border-left: 3px solid #cbd5e1; background: #f8fafc; padding: 12px; border-radius: 0 6px 6px 0; margin-top: 10px;">
+                        <div style="font-size: 13px; font-weight: bold; color: #475569; margin-bottom: 4px; text-transform: uppercase;">{src['name']}</div>
+                        <div style="font-size: 14px; font-style: italic; color: #4b5563;">"{src['text']}"</div>
+                    </div>
+                    """
+
+                # MÃ HTML/CSS BÁO CÁO TUYỆT ĐẸP (CHỐNG LỖI CÚ PHÁP)
+                ai_report_html = f"""
+                <div style="background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 25px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                    <div style="border-bottom: 1px solid #e5e7eb; padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                        <h3 style="margin: 0; color: #111827; font-size: 22px;">🤖 Báo Cáo Cố Vấn Định Lượng: {m_pt}</h3>
+                        <div style="background-color: #dbeafe; color: #166534; padding: 6px 12px; border-radius: 20px; font-size: 14px; font-weight: 600;">⭐ {diem_tcbs}/5.0 (TCBS Rating)</div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 15px; margin-bottom: 25px;">
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; flex: 1;">
+                            <div style="color: #64748b; font-size: 12px; text-transform: uppercase; margin-bottom: 5px; font-weight: 600;">Thị giá hiện tại</div>
+                            <div style="color: #0f172a; font-size: 20px; font-weight: bold;">{gia_pt:,.0f} VNĐ</div>
+                        </div>
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; flex: 1;">
+                            <div style="color: #64748b; font-size: 12px; text-transform: uppercase; margin-bottom: 5px; font-weight: 600;">RSI Kỹ thuật</div>
+                            <div style="color: #2563eb; font-size: 20px; font-weight: bold;">{rsi_pt:.1f} ({rsi_text})</div>
+                        </div>
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; flex: 1;">
+                            <div style="color: #64748b; font-size: 12px; text-transform: uppercase; margin-bottom: 5px; font-weight: 600;">Tín hiệu Dòng tiền</div>
+                            <div style="color: #0f172a; font-size: 20px; font-weight: bold;">{macd_text}</div>
+                        </div>
+                    </div>
+
+                    <div style="border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 20px; overflow: hidden;">
+                        <div style="background: #f9fafb; border-bottom: 1px solid #e5e7eb; padding: 12px 15px; font-weight: 600; color: #374151;">🌍 1. Động lực Vĩ mô & Địa chính trị ({kịch_bản_vĩ_mô})</div>
+                        <div style="padding: 15px; font-size: 15px; color: #4b5563; line-height: 1.6;">{vimo_hien_thi}</div>
+                    </div>
+
+                    <div style="border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 20px; overflow: hidden;">
+                        <div style="background: #f9fafb; border-bottom: 1px solid #e5e7eb; padding: 12px 15px; font-weight: 600; color: #374151;">📑 2. Dự báo & Góc nhìn Tổ chức Chuyên nghiệp</div>
+                        <div style="padding: 15px;">
+                            <ul style="margin-top: 0; color: #4b5563; font-size: 15px;">
+                                <li style="margin-bottom: 8px;"><b>Xu hướng Kỹ thuật:</b> Đường MA20 {"nằm trên" if ma20_pt > ma50_pt else "cắt xuống dưới"} MA50, xác nhận xu hướng <b>{trend_text}</b>.</li>
+                            </ul>
+                            {sources_html}
+                        </div>
+                    </div>
+
+                    <div style="border: 2px solid #22c55e; background: #f0fdf4; border-radius: 8px; overflow: hidden;">
+                        <div style="background: #dcfce7; border-bottom: 1px solid #bbf7d0; padding: 12px 15px; font-weight: 600; color: #166534;">⚡ 3. Chiến lược Hành động (AI Action Plan)</div>
+                        <div style="display: flex; align-items: center; gap: 15px; padding: 15px;">
+                            <div style="background: #22c55e; color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;">✓</div>
+                            <div style="color: #166534; font-weight: 600; font-size: 16px; line-height: 1.5;">{action_hien_thi}</div>
+                        </div>
+                    </div>
+                </div>
+                """
+                st.markdown(ai_report_html, unsafe_allow_html=True)
             else:
                 st.warning("⚠️ Dữ liệu lịch sử của mã này tạm thời gián đoạn, vui lòng chọn mã khác.")
 
