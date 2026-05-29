@@ -2,13 +2,13 @@ import streamlit as st
 import pandas as pd
 import requests
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots # THƯ VIỆN MỚI: VẼ BIỂU ĐỒ ĐA TẦNG
+from plotly.subplots import make_subplots
 import time
 from datetime import datetime, timedelta
 
 # 1. CẤU HÌNH TRANG
 st.set_page_config(page_title="Hệ thống Cảnh báo Chứng khoán Pro", layout="wide")
-st.title("📈 Hệ thống Phân tích Chứng khoán Pro (Giai đoạn 2: Pro-Charting)")
+st.title("📈 Hệ thống Phân tích Chứng khoán Pro (Giai đoạn 3: Smart Screener)")
 
 # 2. KHU VỰC ĐIỀU KHIỂN
 st.sidebar.header("⚙️ Bảng Điều Khiển")
@@ -26,7 +26,7 @@ LOCAL_DB = {
     "TCB": {"industry": "Ngân hàng", "exchange": "HOSE", "issueShare": 7086240000, "eps": 3690, "bvps": 24000, "roe": 0.15}
 }
 
-# --- MODULE 1: KẾT NỐI BIỂU ĐỒ LIVE (VNDIRECT DCHART) ---
+# --- MODULE 1: KẾT NỐI BIỂU ĐỒ LIVE ---
 @st.cache_data(ttl=900, show_spinner=False)
 def lay_du_lieu_bieu_do(ma):
     loi_chi_tiet = []
@@ -50,7 +50,7 @@ def lay_du_lieu_bieu_do(ma):
         loi_chi_tiet.append("VNDirect lỗi mạng.")
     return pd.DataFrame(), "Thất bại 🔴", " | ".join(loi_chi_tiet)
 
-# --- MODULE 2: HỒ SƠ DOANH NGHIỆP TRADINGVIEW + INTERNAL DB ---
+# --- MODULE 2: HỒ SƠ DOANH NGHIỆP ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def lay_ho_so_doanh_nghiep(ma):
     profile = {
@@ -94,7 +94,7 @@ def lay_ho_so_doanh_nghiep(ma):
             profile['nguon_cap'] = 'TradingView + CSDL Nội bộ 🟢'
     return profile
 
-# --- CÁC HÀM TOÁN HỌC & FORMAT ---
+# --- CÁC HÀM TOÁN HỌC & CHỈ BÁO KỸ THUẬT ---
 def tinh_rsi(series, period=14):
     delta = series.diff()
     up = delta.clip(lower=0)
@@ -103,6 +103,14 @@ def tinh_rsi(series, period=14):
     ema_down = down.ewm(com=period-1, adjust=False).mean()
     rs = ema_up / ema_down
     return 100 - (100 / (1 + rs))
+
+# Hàm tính MACD mới cho Giai đoạn 3
+def tinh_macd(series):
+    ema12 = series.ewm(span=12, adjust=False).mean()
+    ema26 = series.ewm(span=26, adjust=False).mean()
+    macd = ema12 - ema26
+    signal = macd.ewm(span=9, adjust=False).mean()
+    return macd, signal
 
 def format_metric(val, is_pct=False):
     if val in [None, 'N/A', '']: return "N/A"
@@ -114,69 +122,49 @@ def format_metric(val, is_pct=False):
         return "N/A"
 
 # 3. GIAO DIỆN CHÍNH (3 TABS)
-tab1, tab2, tab3 = st.tabs(["📊 Biểu đồ Kỹ thuật", "🏢 Hồ sơ Doanh nghiệp", "💡 Khuyến nghị Tự động"])
+tab1, tab2, tab3 = st.tabs(["📊 Biểu đồ Kỹ thuật", "🏢 Hồ sơ Doanh nghiệp", "📡 Radar Dòng tiền (Screener)"])
 
-# TAB 1: BIỂU ĐỒ (ĐƯỢC NÂNG CẤP TOÀN DIỆN MỚI)
+# --- TAB 1: BIỂU ĐỒ (Giữ nguyên sức mạnh Giai đoạn 2) ---
 with tab1:
     st.subheader(f"Trung tâm Phân tích Kỹ thuật - Mã: {ma_chon}")
-    
-    # Bảng điều khiển công cụ (Checkboxes)
     col_t1, col_t2, col_t3, col_t4 = st.columns(4)
-    show_vol = col_t1.checkbox("📊 Bật Volume (Thanh khoản)", value=True)
-    show_ma20 = col_t2.checkbox("📈 Bật MA 20 (Ngắn hạn)", value=True)
-    show_ma50 = col_t3.checkbox("📉 Bật MA 50 (Trung hạn)", value=False)
+    show_vol = col_t1.checkbox("📊 Bật Volume", value=True)
+    show_ma20 = col_t2.checkbox("📈 Bật MA 20", value=True)
+    show_ma50 = col_t3.checkbox("📉 Bật MA 50", value=False)
     show_bb = col_t4.checkbox("🌐 Bật Bollinger Bands", value=False)
 
     with st.spinner("Đang vẽ biểu đồ kỹ thuật đa lớp..."):
         df, nguon, loi = lay_du_lieu_bieu_do(ma_chon)
         if not df.empty:
-            # 1. Tính toán các chỉ báo kỹ thuật
             df['MA20'] = df['Close'].rolling(window=20).mean()
             df['MA50'] = df['Close'].rolling(window=50).mean()
             df['BB_Std'] = df['Close'].rolling(window=20).std()
             df['BB_Upper'] = df['MA20'] + (df['BB_Std'] * 2)
             df['BB_Lower'] = df['MA20'] - (df['BB_Std'] * 2)
 
-            # 2. Khởi tạo Không gian biểu đồ (1 hoặc 2 tầng tùy chọn Volume)
             if show_vol:
-                fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.05, 
-                                    row_heights=[0.75, 0.25], 
-                                    subplot_titles=(f"Hành động Giá ({nguon})", "Khối lượng Giao dịch"))
+                fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.05, row_heights=[0.75, 0.25])
             else:
                 fig = make_subplots(rows=1, cols=1)
 
-            # 3. Đổ lớp Nến Nhật (Candlestick)
             fig.add_trace(go.Candlestick(x=df['Date'], open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name="Nến giá"), row=1, col=1)
 
-            # 4. Đổ các lớp Chỉ báo lên biểu đồ nến
-            if show_ma20:
-                fig.add_trace(go.Scatter(x=df['Date'], y=df['MA20'], mode='lines', name='MA 20', line=dict(color='#2962FF', width=1.5)), row=1, col=1)
-            if show_ma50:
-                fig.add_trace(go.Scatter(x=df['Date'], y=df['MA50'], mode='lines', name='MA 50', line=dict(color='#FF6D00', width=1.5)), row=1, col=1)
+            if show_ma20: fig.add_trace(go.Scatter(x=df['Date'], y=df['MA20'], mode='lines', name='MA 20', line=dict(color='#2962FF', width=1.5)), row=1, col=1)
+            if show_ma50: fig.add_trace(go.Scatter(x=df['Date'], y=df['MA50'], mode='lines', name='MA 50', line=dict(color='#FF6D00', width=1.5)), row=1, col=1)
             if show_bb:
                 fig.add_trace(go.Scatter(x=df['Date'], y=df['BB_Upper'], mode='lines', name='BB Upper', line=dict(color='gray', width=1, dash='dot')), row=1, col=1)
                 fig.add_trace(go.Scatter(x=df['Date'], y=df['BB_Lower'], mode='lines', name='BB Lower', line=dict(color='gray', width=1, dash='dot'), fill='tonexty', fillcolor='rgba(128, 128, 128, 0.1)'), row=1, col=1)
 
-            # 5. Đổ lớp Khối lượng (Volume) xuống tầng 2
             if show_vol:
-                # Xanh nếu Giá Đóng >= Giá Mở, Đỏ nếu ngược lại
                 vol_colors = ['#26A69A' if row['Close'] >= row['Open'] else '#EF5350' for index, row in df.iterrows()]
                 fig.add_trace(go.Bar(x=df['Date'], y=df['Volume'], name='Volume', marker_color=vol_colors), row=2, col=1)
 
-            # 6. Tinh chỉnh Giao diện
-            fig.update_layout(
-                xaxis_rangeslider_visible=False, 
-                xaxis2_rangeslider_visible=False,
-                margin=dict(l=20, r=20, t=40, b=20), 
-                height=650, # Kéo dài biểu đồ ra cho dễ nhìn
-                showlegend=True,
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-            )
-            
+            fig.update_layout(xaxis_rangeslider_visible=False, xaxis2_rangeslider_visible=False, margin=dict(l=20, r=20, t=40, b=20), height=650, showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.error("Không thể lấy dữ liệu biểu đồ.")
 
+# --- TAB 2: HỒ SƠ DOANH NGHIỆP ---
 with tab2:
     st.subheader(f"Báo cáo Tài chính Cơ bản - Mã: {ma_chon}")
     with st.spinner("Đang đồng bộ Dữ liệu..."):
@@ -211,22 +199,58 @@ with tab2:
         st.write(f"- **Tổng cổ phiếu lưu hành:** `{profile.get('issueShare', 0):,.0f}`")
         st.write(f"- **Sàn niêm yết:** `{profile.get('exchange', 'N/A')}`")
 
+# --- TAB 3 (MỚI KÍCH HOẠT): RADAR DÒNG TIỀN ĐA BIẾN ---
 with tab3:
-    st.subheader("Bảng quét chỉ số RSI toàn thị trường")
-    if st.button("🚀 Bắt đầu Quét dữ liệu"):
+    st.subheader("Radar Quét Khối lượng & Tín hiệu Đa biến")
+    st.markdown("Hệ thống tự động chấm điểm sức mạnh cổ phiếu dựa trên **RSI**, **MACD**, **MA Crossover** và phát hiện dòng tiền lớn nhập cuộc.")
+    
+    if st.button("🚀 Kích hoạt Radar Quét Toàn Thị Trường"):
         ket_qua = []
-        with st.spinner("Đang quét siêu tốc..."):
+        with st.spinner("Đang cho Robot phân tích Tín hiệu và Đột biến khối lượng..."):
             for ma in DANH_SACH_MA:
-                df_scan, nguon_scan, _ = lay_du_lieu_bieu_do(ma)
-                if not df_scan.empty:
+                df_scan, _, _ = lay_du_lieu_bieu_do(ma)
+                
+                # Cần ít nhất 50 phiên để tính đường MA50
+                if not df_scan.empty and len(df_scan) >= 50:
+                    # 1. Tính toán mọi chỉ báo
                     df_scan['RSI'] = tinh_rsi(df_scan['Close'])
-                    gia_hien_tai = df_scan['Close'].iloc[-1]
-                    rsi_hien_tai = df_scan['RSI'].iloc[-1]
+                    df_scan['MA20'] = df_scan['Close'].rolling(window=20).mean()
+                    df_scan['MA50'] = df_scan['Close'].rolling(window=50).mean()
+                    df_scan['Vol20'] = df_scan['Volume'].rolling(window=20).mean()
+                    macd, signal = tinh_macd(df_scan['Close'])
                     
-                    if rsi_hien_tai <= 30: trang_thai = "🟢 MUA (Quá bán)"
-                    elif rsi_hien_tai >= 70: trang_thai = "🔴 BÁN (Quá mua)"
-                    else: trang_thai = "🔵 Giữ"
+                    # 2. Lấy thông số phiên gần nhất (Ngày hôm nay)
+                    gia = df_scan['Close'].iloc[-1]
+                    rsi = df_scan['RSI'].iloc[-1]
+                    ma20 = df_scan['MA20'].iloc[-1]
+                    ma50 = df_scan['MA50'].iloc[-1]
+                    vol = df_scan['Volume'].iloc[-1]
+                    vol_20 = df_scan['Vol20'].iloc[-1]
+                    macd_cur = macd.iloc[-1]
+                    sig_cur = signal.iloc[-1]
+                    
+                    # 3. Thuật toán Chấm điểm (Scoring Engine)
+                    diem_mua = 0
+                    tin_hieu = []
+                    
+                    # Chấm điểm RSI
+                    if rsi < 35:
+                        diem_mua += 1
+                        tin_hieu.append("RSI vùng đáy")
+                    elif rsi > 70:
+                        diem_mua -= 1
+                        tin_hieu.append("RSI vùng đỉnh")
                         
-                    ket_qua.append({"Mã CP": ma, "Giá": f"{gia_hien_tai:,.0f}", "RSI": round(rsi_hien_tai, 2), "Khuyến nghị": trang_thai})
-                time.sleep(0.5)
-        if ket_qua: st.dataframe(pd.DataFrame(ket_qua), use_container_width=True)
+                    # Chấm điểm Xu hướng MA
+                    if ma20 > ma50:
+                        diem_mua += 1
+                        tin_hieu.append("MA20 Cắt lên MA50")
+                        
+                    # Chấm điểm MACD
+                    if macd_cur > sig_cur:
+                        diem_mua += 1
+                        tin_hieu.append("MACD Báo mua")
+                        
+                    # Chấm điểm Đột biến dòng tiền (Nổ Vol)
+                    dot_bien = "Bình thường"
+                    if vol > (vol_20 *
