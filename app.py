@@ -3,12 +3,11 @@ import pandas as pd
 import requests
 import plotly.graph_objects as go
 import time
-import urllib.parse
 from datetime import datetime, timedelta
 
 # 1. CẤU HÌNH TRANG
 st.set_page_config(page_title="Hệ thống Cảnh báo Chứng khoán Pro", layout="wide")
-st.title("📈 Hệ thống Phân tích Chứng khoán Pro (Multi-Source Engine)")
+st.title("📈 Hệ thống Phân tích Chứng khoán Pro (TradingView Engine)")
 
 # 2. KHU VỰC ĐIỀU KHIỂN
 st.sidebar.header("⚙️ Bảng Điều Khiển")
@@ -24,7 +23,7 @@ def lay_du_lieu_bieu_do(ma):
 
     try:
         url_vnd = f"https://dchart-api.vndirect.com.vn/dchart/history?symbol={ma}&resolution=D&from={start_ts}&to={end_ts}"
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        headers = {'User-Agent': 'Mozilla/5.0'}
         res = requests.get(url_vnd, headers=headers, timeout=7)
         if res.status_code == 200:
             data = res.json()
@@ -34,7 +33,7 @@ def lay_du_lieu_bieu_do(ma):
                     'Open': data['o'], 'High': data['h'], 'Low': data['l'], 'Close': data['c'], 'Volume': data['v']
                 })
                 df[['Open', 'High', 'Low', 'Close']] = df[['Open', 'High', 'Low', 'Close']] * 1000
-                return df.tail(180).reset_index(drop=True), "Máy chủ VNDirect 🟢", ""
+                return df.tail(180).reset_index(drop=True), "VNDirect DChart 🟢", ""
             else:
                 loi_chi_tiet.append("VNDirect: Không tìm thấy dữ liệu.")
         else:
@@ -44,80 +43,53 @@ def lay_du_lieu_bieu_do(ma):
 
     return pd.DataFrame(), "Thất bại 🔴", " | ".join(loi_chi_tiet)
 
-# --- MODULE 2 (HYBRID): HỒ SƠ DOANH NGHIỆP TỪ 3 NGUỒN ---
+# --- MODULE 2 (TỐI THƯỢNG): KÉO HỒ SƠ TỪ MÁY CHỦ QUỐC TẾ TRADINGVIEW ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def lay_ho_so_doanh_nghiep(ma):
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json, text/plain, */*'
+    profile = {
+        'industry': 'N/A', 'pe': 'N/A', 'pb': 'N/A', 'roe': 'N/A', 
+        'exchange': 'N/A', 'issueShare': 0, 'marketCap': 0, 
+        'nguon_cap': 'Đang kết nối...'
     }
-    profile = {'industry': 'N/A', 'pe': 'N/A', 'pb': 'N/A', 'roe': 'N/A', 'exchange': 'N/A', 'issueShare': 0, 'nguon_cap': 'Đang kết nối...'}
-
-    # ƯU TIÊN 1: Cổng FireAnt (Siêu tốc, thân thiện với máy chủ đám mây)
+    
+    # Truy cập thẳng vào Trạm quét dữ liệu thị trường Việt Nam của TradingView
+    url = "https://scanner.tradingview.com/vietnam/scan"
+    
+    # Gửi cả 3 mã định danh (HOSE, HNX, UPCOM) để TradingView tự tìm mã đúng
+    payload = {
+        "symbols": {"tickers": [f"HOSE:{ma}", f"HNX:{ma}", f"UPCOM:{ma}"]},
+        "columns": [
+            "price_earnings_ttm",      # P/E
+            "price_book_ratio",        # P/B
+            "return_on_equity",        # ROE
+            "total_shares_outstanding",# Tổng cổ phiếu
+            "market_cap_basic",        # Vốn hóa
+            "sector"                   # Ngành nghề
+        ]
+    }
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    
     try:
-        url_fa_fi = f"https://svr1.fireant.vn/api/Data/Finance/LastestFinancialInfo?symbol={ma}"
-        url_fa_pr = f"https://svr1.fireant.vn/api/Data/Companies/CompanyInfo?symbol={ma}"
-        
-        res_fi = requests.get(url_fa_fi, headers=headers, timeout=5)
-        res_pr = requests.get(url_fa_pr, headers=headers, timeout=5)
-        
-        if res_fi.status_code == 200 and res_pr.status_code == 200:
-            data_fi = res_fi.json()
-            data_pr = res_pr.json()
-            
-            if isinstance(data_fi, list) and len(data_fi) > 0:
-                item = data_fi[0]
-                profile['pe'] = item.get('PE')
-                profile['pb'] = item.get('PB')
-                profile['roe'] = item.get('ROE')
-                profile['issueShare'] = item.get('OutstandingShare', 0)
-            
-            if isinstance(data_pr, dict):
-                profile['industry'] = data_pr.get('IndustryName', 'N/A')
-                profile['exchange'] = data_pr.get('Exchange', 'N/A')
-            
-            if profile['pe'] is not None:
-                profile['nguon_cap'] = 'Hệ thống FireAnt 🟢'
-                return profile
-    except:
-        pass
-
-    # ƯU TIÊN 2: Cổng TCBS thông qua CorsProxy (Công nghệ vượt tường lửa mạnh nhất)
-    try:
-        url_tcbs = f"https://apipubaws.tcbs.com.vn/tcanalysis/v1/ticker/{ma}/overview"
-        url_proxy = f"https://corsproxy.io/?{urllib.parse.quote(url_tcbs)}"
-        res = requests.get(url_proxy, headers=headers, timeout=8)
+        res = requests.post(url, json=payload, headers=headers, timeout=10)
         if res.status_code == 200:
-            data = res.json()
-            if 'pe' in data:
-                profile['pe'] = data.get('pe')
-                profile['pb'] = data.get('pb')
-                profile['roe'] = data.get('roe')
-                profile['industry'] = data.get('industryEn', data.get('industry', 'N/A'))
-                profile['exchange'] = data.get('exchange', 'N/A')
-                profile['issueShare'] = data.get('issueShare', 0)
-                profile['nguon_cap'] = 'Máy chủ TCBS (CorsProxy) 🟡'
-                return profile
-    except:
-        pass
-
-    # ƯU TIÊN 3: Cổng SSI FiinTrade
-    try:
-        url_ssi = f"https://fiin-fundamental.ssi.com.vn/StockInfor/StockOverview/{ma}"
-        res = requests.get(url_ssi, headers=headers, timeout=5)
-        if res.status_code == 200:
-            data = res.json()
-            item = data.get('item', data)
-            if 'pe' in item or 'priceToEarning' in item:
-                profile['pe'] = item.get('priceToEarning', item.get('pe'))
-                profile['pb'] = item.get('priceToBook', item.get('pb'))
-                profile['roe'] = item.get('roe')
-                profile['industry'] = item.get('icbName', 'N/A')
-                profile['exchange'] = item.get('comGroupCode', 'N/A')
-                profile['issueShare'] = item.get('outstandingShare', 0)
-                profile['nguon_cap'] = 'Máy chủ SSI 🟠'
-                return profile
-    except:
+            data = res.json().get('data', [])
+            if data and len(data) > 0:
+                item = data[0]
+                san_ma = item.get('s', '') 
+                san = san_ma.split(':')[0] if ':' in san_ma else 'N/A'
+                
+                d = item.get('d', [])
+                if len(d) >= 6:
+                    profile['pe'] = d[0]
+                    profile['pb'] = d[1]
+                    profile['roe'] = d[2]
+                    profile['issueShare'] = d[3] if d[3] else 0
+                    profile['marketCap'] = d[4] if d[4] else 0
+                    profile['industry'] = d[5] if d[5] else 'N/A'
+                    profile['exchange'] = san
+                    profile['nguon_cap'] = 'Máy chủ TradingView (Mỹ) 🟢'
+                    return profile
+    except Exception:
         pass
         
     return profile
@@ -132,13 +104,13 @@ def tinh_rsi(series, period=14):
     rs = ema_up / ema_down
     return 100 - (100 / (1 + rs))
 
-# Hàm bộ lọc định dạng tránh lỗi N/A
 def format_metric(val, is_pct=False):
     if val in [None, 'N/A', '']: return "N/A"
     try:
         v = float(val)
+        # TradingView trả về số thực (VD: 20.5 cho 20.5%), chỉ cần thêm dấu %
         if is_pct:
-            return f"{v*100:.2f}%" if abs(v) < 2 else f"{v:.2f}%"
+            return f"{v:.2f}%"
         return f"{v:.2f}"
     except:
         return "N/A"
@@ -164,7 +136,7 @@ with tab1:
 # TAB 2: HỒ SƠ DOANH NGHIỆP
 with tab2:
     st.subheader(f"Báo cáo Tài chính Cơ bản - Mã: {ma_chon}")
-    with st.spinner("Đang kích hoạt Động cơ Đa luồng để tìm kiếm hồ sơ..."):
+    with st.spinner("Đang kết nối trạm vệ tinh TradingView để lấy hồ sơ (Chống chặn IP)..."):
         profile = lay_ho_so_doanh_nghiep(ma_chon)
         st.caption(f"Nguồn cấp dữ liệu: **{profile.get('nguon_cap')}**")
         
@@ -180,24 +152,22 @@ with tab2:
         st.write("📌 **Quy mô doanh nghiệp & Giao dịch:**")
         
         issue_share = profile.get('issueShare', 0)
-        try:
-            issue_share = float(issue_share)
-        except:
-            issue_share = 0
-            
-        von_hoa = 0
+        market_cap_vnd = profile.get('marketCap', 0)
+        
+        # Chuyển đổi vốn hóa sang đơn vị "Tỷ VNĐ"
+        von_hoa = market_cap_vnd / 1_000_000_000 if market_cap_vnd else 0
         klgd_20 = 0
+        gia_hien_tai = 0
         
         if 'df' in locals() and not df.empty:
             gia_hien_tai = df['Close'].iloc[-1]
-            klgd_20 = df['Volume'].tail(20).mean() # Trung bình thanh khoản 20 phiên
-            von_hoa = (gia_hien_tai * issue_share) / 1_000_000_000 # Công thức Vốn hóa
+            klgd_20 = df['Volume'].tail(20).mean()
             
-            st.write(f"- **Thị giá hiện tại:** `{gia_hien_tai:,.0f}` VNĐ")
-            st.write(f"- **Vốn hóa thị trường:** `{von_hoa:,.0f}` tỷ VNĐ")
-            st.write(f"- **KLGD trung bình (20 phiên):** `{klgd_20:,.0f}` cổ phiếu")
-            st.write(f"- **Tổng cổ phiếu lưu hành:** `{issue_share:,.0f}`")
-            st.write(f"- **Sàn niêm yết:** `{profile.get('exchange', 'N/A')}`")
+        st.write(f"- **Thị giá hiện tại:** `{gia_hien_tai:,.0f}` VNĐ")
+        st.write(f"- **Vốn hóa thị trường:** `{von_hoa:,.0f}` tỷ VNĐ")
+        st.write(f"- **KLGD trung bình (20 phiên):** `{klgd_20:,.0f}` cổ phiếu")
+        st.write(f"- **Tổng cổ phiếu lưu hành:** `{issue_share:,.0f}`")
+        st.write(f"- **Sàn niêm yết:** `{profile.get('exchange', 'N/A')}`")
 
 # TAB 3: KHUYẾN NGHỊ RSI
 with tab3:
