@@ -3,13 +3,13 @@ import pandas as pd
 import requests
 import plotly.graph_objects as go
 import time
-import urllib.parse
-import yfinance as yf # GỌI LẠI VIỆN BINH YAHOO
+import re # THƯ VIỆN ROBOT QUÉT HTML
+import yfinance as yf
 from datetime import datetime, timedelta
 
 # 1. CẤU HÌNH TRANG
 st.set_page_config(page_title="Hệ thống Cảnh báo Chứng khoán Pro", layout="wide")
-st.title("📈 Hệ thống Phân tích Chứng khoán Pro (Ultimate Engine)")
+st.title("📈 Hệ thống Phân tích Chứng khoán Pro (Zero-Blindspot)")
 
 # 2. KHU VỰC ĐIỀU KHIỂN
 st.sidebar.header("⚙️ Bảng Điều Khiển")
@@ -38,12 +38,12 @@ def lay_du_lieu_bieu_do(ma):
                 return df.tail(180).reset_index(drop=True), "VNDirect DChart 🟢", ""
             else:
                 loi_chi_tiet.append("VNDirect: Không tìm thấy dữ liệu.")
-    except Exception as e:
-        loi_chi_tiet.append(f"VNDirect lỗi mạng.")
+    except Exception:
+        loi_chi_tiet.append("VNDirect lỗi mạng.")
 
     return pd.DataFrame(), "Thất bại 🔴", " | ".join(loi_chi_tiet)
 
-# --- MODULE 2 (TỐI THƯỢNG): TRADINGVIEW + YAHOO FINANCE FALLBACK ---
+# --- MODULE 2: HỆ THỐNG QUÉT DỮ LIỆU ĐA LỚP ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def lay_ho_so_doanh_nghiep(ma):
     profile = {
@@ -52,7 +52,7 @@ def lay_ho_so_doanh_nghiep(ma):
         'nguon_cap': 'Đang kết nối...'
     }
     
-    # ƯU TIÊN 1: Lấy dữ liệu siêu nhanh từ TradingView
+    # LỚP 1: NỀN TẢNG TRADINGVIEW (MỸ)
     url_tv = "https://scanner.tradingview.com/vietnam/scan"
     payload = {
         "symbols": {"tickers": [f"HOSE:{ma}", f"HNX:{ma}", f"UPCOM:{ma}"]},
@@ -78,33 +78,52 @@ def lay_ho_so_doanh_nghiep(ma):
     except:
         pass
 
-    # ƯU TIÊN 2: Bù đắp khuyết điểm bằng Yahoo Finance (Dành cho mã UPCOM như OIL, ACV)
-    # Kích hoạt khi TradingView không có dữ liệu Vốn hóa hoặc P/E
-    if profile['marketCap'] == 0 or profile['pe'] == 'N/A':
-        hnx_tickers = ["PVC", "PVS", "SHS", "CEO", "MBS", "IDC", "TNG"]
-        symbol = f"{ma}.HN" if ma in hnx_tickers else f"{ma}.VN" # Gắn đuôi .VN cho HOSE và UPCOM
-        
+    # LỚP 2: ROBOT CÀO DỮ LIỆU COPHIEU68 (Trị tận gốc mã UPCOM khuyết dữ liệu)
+    if profile['pe'] == 'N/A' or profile['issueShare'] == 0:
         try:
-            tk = yf.Ticker(symbol)
-            info = tk.info
-            if info:
-                profile['pe'] = info.get('trailingPE', profile['pe'])
-                profile['pb'] = info.get('priceToBook', profile['pb'])
+            url_cp68 = f"https://www.cophieu68.vn/snapshot.php?id={ma}"
+            res = requests.get(url_cp68, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
+            if res.status_code == 200:
+                html = res.text
                 
-                # Đồng bộ định dạng phần trăm của Yahoo với hệ thống
-                roe_raw = info.get('returnOnEquity')
-                if roe_raw is not None:
-                    profile['roe'] = roe_raw * 100 
-                    
-                profile['issueShare'] = info.get('sharesOutstanding', profile['issueShare'])
-                profile['marketCap'] = info.get('marketCap', profile['marketCap'])
+                # Hàm dùng Regex bóc tách đúng con số từ bảng HTML
+                def extract_val(pattern):
+                    match = re.search(pattern, html, re.IGNORECASE | re.DOTALL)
+                    if match:
+                        try: return float(match.group(1).replace(',', ''))
+                        except: return 'N/A'
+                    return 'N/A'
                 
-                if profile['industry'] == 'N/A': profile['industry'] = info.get('industry', 'N/A')
-                if profile['exchange'] == 'N/A': profile['exchange'] = 'HOSE/UPCOM' if '.VN' in symbol else 'HNX'
+                pe_val = extract_val(r'P/E.*?<strong[^>]*>\s*([\d\.,]+)\s*</strong>')
+                pb_val = extract_val(r'P/B.*?<strong[^>]*>\s*([\d\.,]+)\s*</strong>')
+                roe_val = extract_val(r'ROE.*?<strong[^>]*>\s*([\d\.,]+)\s*')
+                kl_val = extract_val(r'KL đang lưu hành.*?<strong[^>]*>\s*([\d\.,]+)\s*</strong>')
                 
-                profile['nguon_cap'] = 'TradingView + Viện binh Yahoo 🟡'
+                if pe_val != 'N/A' and profile['pe'] == 'N/A': profile['pe'] = pe_val
+                if pb_val != 'N/A' and profile['pb'] == 'N/A': profile['pb'] = pb_val
+                if roe_val != 'N/A' and profile['roe'] == 'N/A': profile['roe'] = roe_val
+                if kl_val != 'N/A' and profile['issueShare'] == 0: profile['issueShare'] = kl_val
+                
+                if profile['nguon_cap'] == 'Đang kết nối...':
+                    profile['nguon_cap'] = 'Robot Cophieu68 🟡'
+                else:
+                    profile['nguon_cap'] = 'TradingView + Robot Cophieu68 🟡'
         except:
             pass
+
+    # LỚP 3: LƯỚI AN TOÀN YFINANCE
+    if profile['issueShare'] == 0:
+        for suffix in [".VN", ".HN"]:
+            try:
+                tk = yf.Ticker(f"{ma}{suffix}")
+                fast = tk.fast_info
+                if fast and hasattr(fast, 'shares'):
+                    profile['issueShare'] = fast.shares
+                    if profile['marketCap'] == 0: profile['marketCap'] = fast.market_cap
+                    profile['nguon_cap'] = 'TradingView + Yahoo Finance 🟠'
+                    break
+            except:
+                pass
 
     return profile
 
@@ -147,7 +166,7 @@ with tab1:
 # TAB 2: HỒ SƠ DOANH NGHIỆP
 with tab2:
     st.subheader(f"Báo cáo Tài chính Cơ bản - Mã: {ma_chon}")
-    with st.spinner("Đang kết nối trạm vệ tinh và quét bổ sung dữ liệu bị khuyết..."):
+    with st.spinner("Đang rà soát và bù đắp dữ liệu khuyết bằng Web Scraper..."):
         profile = lay_ho_so_doanh_nghiep(ma_chon)
         st.caption(f"Nguồn cấp dữ liệu: **{profile.get('nguon_cap')}**")
         
@@ -162,19 +181,28 @@ with tab2:
         
         issue_share = profile.get('issueShare', 0)
         market_cap_vnd = profile.get('marketCap', 0)
-        von_hoa = market_cap_vnd / 1_000_000_000 if market_cap_vnd else 0
-        klgd_20 = 0
-        gia_hien_tai = 0
         
+        gia_hien_tai = 0
+        klgd_20 = 0
         if 'df' in locals() and not df.empty:
             gia_hien_tai = df['Close'].iloc[-1]
             klgd_20 = df['Volume'].tail(20).mean()
+            
+        # THUẬT TOÁN BÙ ĐẮP: Tự tính Vốn hóa nếu TradingView báo 0
+        if market_cap_vnd == 0 and issue_share > 0 and gia_hien_tai > 0:
+            market_cap_vnd = issue_share * gia_hien_tai
+            
+        von_hoa = market_cap_vnd / 1_000_000_000 if market_cap_vnd else 0
             
         st.write(f"- **Thị giá hiện tại:** `{gia_hien_tai:,.0f}` VNĐ")
         st.write(f"- **Vốn hóa thị trường:** `{von_hoa:,.0f}` tỷ VNĐ")
         st.write(f"- **KLGD trung bình (20 phiên):** `{klgd_20:,.0f}` cổ phiếu")
         st.write(f"- **Tổng cổ phiếu lưu hành:** `{issue_share:,.0f}`")
-        st.write(f"- **Sàn niêm yết:** `{profile.get('exchange', 'N/A')}`")
+        
+        san_niem_yet = profile.get('exchange', 'N/A')
+        # Sửa tên sàn nếu hệ thống báo N/A
+        if san_niem_yet == 'N/A' and ma_chon in ["OIL", "ACV", "DRI"]: san_niem_yet = 'UPCOM'
+        st.write(f"- **Sàn niêm yết:** `{san_niem_yet}`")
 
 # TAB 3: KHUYẾN NGHỊ RSI
 with tab3:
