@@ -104,7 +104,6 @@ def tinh_rsi(series, period=14):
     rs = ema_up / ema_down
     return 100 - (100 / (1 + rs))
 
-# Hàm tính MACD mới cho Giai đoạn 3
 def tinh_macd(series):
     ema12 = series.ewm(span=12, adjust=False).mean()
     ema26 = series.ewm(span=26, adjust=False).mean()
@@ -124,7 +123,7 @@ def format_metric(val, is_pct=False):
 # 3. GIAO DIỆN CHÍNH (3 TABS)
 tab1, tab2, tab3 = st.tabs(["📊 Biểu đồ Kỹ thuật", "🏢 Hồ sơ Doanh nghiệp", "📡 Radar Dòng tiền (Screener)"])
 
-# --- TAB 1: BIỂU ĐỒ (Giữ nguyên sức mạnh Giai đoạn 2) ---
+# --- TAB 1: BIỂU ĐỒ ---
 with tab1:
     st.subheader(f"Trung tâm Phân tích Kỹ thuật - Mã: {ma_chon}")
     col_t1, col_t2, col_t3, col_t4 = st.columns(4)
@@ -199,7 +198,7 @@ with tab2:
         st.write(f"- **Tổng cổ phiếu lưu hành:** `{profile.get('issueShare', 0):,.0f}`")
         st.write(f"- **Sàn niêm yết:** `{profile.get('exchange', 'N/A')}`")
 
-# --- TAB 3 (MỚI KÍCH HOẠT): RADAR DÒNG TIỀN ĐA BIẾN ---
+# --- TAB 3: RADAR DÒNG TIỀN ĐA BIẾN ---
 with tab3:
     st.subheader("Radar Quét Khối lượng & Tín hiệu Đa biến")
     st.markdown("Hệ thống tự động chấm điểm sức mạnh cổ phiếu dựa trên **RSI**, **MACD**, **MA Crossover** và phát hiện dòng tiền lớn nhập cuộc.")
@@ -210,16 +209,13 @@ with tab3:
             for ma in DANH_SACH_MA:
                 df_scan, _, _ = lay_du_lieu_bieu_do(ma)
                 
-                # Cần ít nhất 50 phiên để tính đường MA50
                 if not df_scan.empty and len(df_scan) >= 50:
-                    # 1. Tính toán mọi chỉ báo
                     df_scan['RSI'] = tinh_rsi(df_scan['Close'])
                     df_scan['MA20'] = df_scan['Close'].rolling(window=20).mean()
                     df_scan['MA50'] = df_scan['Close'].rolling(window=50).mean()
                     df_scan['Vol20'] = df_scan['Volume'].rolling(window=20).mean()
                     macd, signal = tinh_macd(df_scan['Close'])
                     
-                    # 2. Lấy thông số phiên gần nhất (Ngày hôm nay)
                     gia = df_scan['Close'].iloc[-1]
                     rsi = df_scan['RSI'].iloc[-1]
                     ma20 = df_scan['MA20'].iloc[-1]
@@ -229,11 +225,9 @@ with tab3:
                     macd_cur = macd.iloc[-1]
                     sig_cur = signal.iloc[-1]
                     
-                    # 3. Thuật toán Chấm điểm (Scoring Engine)
                     diem_mua = 0
                     tin_hieu = []
                     
-                    # Chấm điểm RSI
                     if rsi < 35:
                         diem_mua += 1
                         tin_hieu.append("RSI vùng đáy")
@@ -241,16 +235,36 @@ with tab3:
                         diem_mua -= 1
                         tin_hieu.append("RSI vùng đỉnh")
                         
-                    # Chấm điểm Xu hướng MA
                     if ma20 > ma50:
                         diem_mua += 1
                         tin_hieu.append("MA20 Cắt lên MA50")
                         
-                    # Chấm điểm MACD
                     if macd_cur > sig_cur:
                         diem_mua += 1
                         tin_hieu.append("MACD Báo mua")
                         
-                    # Chấm điểm Đột biến dòng tiền (Nổ Vol)
                     dot_bien = "Bình thường"
-                    if vol > (vol_20 *
+                    if vol > (vol_20 * 1.5): 
+                        diem_mua += 1
+                        dot_bien = "⭐ NỔ VOL DÒNG TIỀN"
+                        
+                    if diem_mua >= 3:
+                        khuyen_nghi = "🟢 MUA MẠNH"
+                    elif diem_mua >= 1:
+                        khuyen_nghi = "🟡 NẮM GIỮ / THEO DÕI"
+                    else:
+                        khuyen_nghi = "🔴 RỦI RO / BÁN"
+                        
+                    ket_qua.append({
+                        "Mã CP": ma, 
+                        "Giá": f"{gia:,.0f}", 
+                        "RSI": round(rsi, 2), 
+                        "Dòng tiền": dot_bien,
+                        "Hội tụ Kỹ thuật": ", ".join(tin_hieu) if tin_hieu else "Phân kỳ/Suy yếu",
+                        "Hành động": khuyen_nghi
+                    })
+                time.sleep(0.3) 
+        
+        if ket_qua:
+            df_kq = pd.DataFrame(ket_qua)
+            st.dataframe(df_kq, use_container_width=True, hide_index=True)
