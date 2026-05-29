@@ -11,14 +11,10 @@ from datetime import datetime, timedelta
 
 # 1. CẤU HÌNH TRANG
 st.set_page_config(page_title="Hệ thống Cảnh báo Chứng khoán Pro", layout="wide")
-st.title("📈 Hệ thống Phân tích & Quản trị Chứng khoán Pro (Database Integrated)")
-
-# 2. KHU VỰC ĐIỀU KHIỂN
-st.sidebar.header("⚙️ Bảng Điều Khiển")
-DANH_SACH_MA = ["TCB", "ACV", "OIL", "PVC", "DRI", "CSM", "TNT"]
-ma_chon = st.sidebar.selectbox("Chọn mã cổ phiếu phân tích chuyên sâu:", DANH_SACH_MA)
+st.title("📈 Hệ thống Phân tích & Quản trị Chứng khoán Pro (Dynamic Watchlist)")
 
 # --- CƠ SỞ DỮ LIỆU NỘI BỘ VỀ DOANH NGHIỆP (LOCAL DATA LAKE) ---
+# Dùng để dự phòng cho các mã UPCOM bị TradingView bỏ sót
 LOCAL_DB = {
     "ACV": {"name": "Tổng công ty Cảng hàng không VN", "industry": "Vận tải Hàng không", "exchange": "UPCOM", "issueShare": 2177173236, "eps": 4850, "bvps": 23500, "roe": 0.18},
     "OIL": {"name": "Tổng công ty Dầu Việt Nam", "industry": "Bán lẻ Xăng dầu", "exchange": "UPCOM", "issueShare": 1034229500, "eps": 750, "bvps": 11200, "roe": 0.06},
@@ -29,7 +25,7 @@ LOCAL_DB = {
     "TCB": {"name": "Ngân hàng Kỹ thương Việt Nam", "industry": "Ngân hàng", "exchange": "HOSE", "issueShare": 7086240000, "eps": 3690, "bvps": 24000, "roe": 0.15}
 }
 
-# --- CÔNG NGHỆ BỘ LƯU TRỮ DANH MỤC VĨNH VIỄN (DATABASE ENGINE) ---
+# --- CÔNG NGHỆ BỘ LƯU TRỮ DANH MỤC VĨNH VIỄN ---
 FILE_BO_NHU = "portfolio_storage.json"
 
 def tai_danh_muc_tu_o_cung():
@@ -46,7 +42,45 @@ def luu_danh_muc_vao_o_cung(du_lieu):
     with open(FILE_BO_NHU, "w", encoding="utf-8") as f:
         json.dump(du_lieu, f, ensure_ascii=False, indent=4)
 
+# Lấy danh sách mã động từ bộ nhớ
 DANH_MỤC_LIVE = tai_danh_muc_tu_o_cung()
+DANH_SACH_MA = list(DANH_MỤC_LIVE.keys())
+
+# 2. KHU VỰC ĐIỀU KHIỂN (SIDEBAR ĐỘNG)
+st.sidebar.header("⚙️ Quản lý Mã Cổ Phiếu")
+
+# Tính năng Thêm mã
+ma_moi = st.sidebar.text_input("Thêm mã mới (VD: FPT, HPG):").upper().strip()
+if st.sidebar.button("➕ Thêm Mã"):
+    if ma_moi and ma_moi not in DANH_MỤC_LIVE:
+        DANH_MỤC_LIVE[ma_moi] = [0, 0] # Mặc định số lượng 0, giá vốn 0
+        luu_danh_muc_vao_o_cung(DANH_MỤC_LIVE)
+        st.sidebar.success(f"Đã thêm {ma_moi} vào hệ thống!")
+        time.sleep(0.5)
+        st.rerun()
+    elif ma_moi in DANH_MỤC_LIVE:
+        st.sidebar.warning(f"Mã {ma_moi} đã có sẵn trong danh sách.")
+
+# Tính năng Xóa mã
+st.sidebar.markdown("---")
+ma_xoa = st.sidebar.selectbox("Chọn mã để xóa khỏi hệ thống:", [""] + DANH_SACH_MA)
+if st.sidebar.button("🗑️ Xóa Mã"):
+    if ma_xoa and ma_xoa in DANH_MỤC_LIVE:
+        del DANH_MỤC_LIVE[ma_xoa]
+        luu_danh_muc_vao_o_cung(DANH_MỤC_LIVE)
+        st.sidebar.success(f"Đã xóa vĩnh viễn {ma_xoa}!")
+        time.sleep(0.5)
+        st.rerun()
+
+st.sidebar.markdown("---")
+st.sidebar.header("🔍 Phân tích Chuyên sâu")
+
+# Kiểm tra an toàn: Nếu danh sách rỗng, yêu cầu người dùng thêm mã
+if not DANH_SACH_MA:
+    st.warning("⚠️ Danh mục theo dõi đang trống. Vui lòng sử dụng Bảng điều khiển bên trái để thêm mã cổ phiếu (VD: TCB, FPT).")
+    st.stop()
+
+ma_chon = st.sidebar.selectbox("Chọn mã cổ phiếu xem chi tiết:", DANH_SACH_MA)
 
 # --- MODULE 1: KẾT NỐI BIỂU ĐỒ LIVE ---
 @st.cache_data(ttl=900, show_spinner=False)
@@ -216,7 +250,7 @@ with tab2:
 
         st.markdown("---")
         st.write("📌 **Quy mô doanh nghiệp & Giao dịch:**")
-        st.write(f"- **Tên doanh nghiệp:** `{LOCAL_DB.get(ma_chon, {}).get('name', 'N/A')}`")
+        st.write(f"- **Tên doanh nghiệp:** `{LOCAL_DB.get(ma_chon, {}).get('name', 'Hệ thống đang tự động trích xuất')}`")
         st.write(f"- **Thị giá hiện tại:** `{gia_hien_tai:,.0f}` VNĐ")
         st.write(f"- **Vốn hóa thị trường:** `{von_hoa_ty:,.0f}` tỷ VNĐ")
         st.write(f"- **KLGD trung bình (20 phiên):** `{klgd_20:,.0f}` cổ phiếu")
@@ -283,10 +317,10 @@ with tab3:
             csv_radar = df_kq.to_csv(index=False).encode('utf-8')
             st.download_button(label="📥 Xuất báo cáo Radar Dòng tiền (CSV)", data=csv_radar, file_name="bao_cao_radar_live.csv", mime="text/csv")
 
-# --- TAB 4: QUẢN LÝ DANH MỤC TÍCH HỢP BỘ LƯU TRỮ ---
+# --- TAB 4: QUẢN LÝ DANH MỤC ---
 with tab4:
     st.subheader("💼 Hệ thống Quản trị Tài sản ròng (Đã tích hợp CSDL vĩnh viễn)")
-    st.markdown("Nhập khối lượng tài sản của anh vào bảng bên dưới. Sau khi nhập xong, bấm nút **Lưu** ở cuối bảng để hệ thống ghi nhớ vĩnh viễn.")
+    st.markdown("Thay đổi khối lượng và giá vốn, sau đó bấm nút **Lưu** ở cuối bảng để ghi nhớ vĩnh viễn.")
 
     du_lieu_cap_nhat = {}
     
@@ -303,8 +337,6 @@ with tab4:
         gia_mac_dinh = DANH_MỤC_LIVE.get(ma, [0, 0])[1]
         
         sl = c2.number_input(f"Số lượng {ma}", min_value=0, step=100, value=sl_mac_dinh, label_visibility="collapsed", key=f"sl_{ma}")
-        
-        # BẢN VÁ LỖI NẰM TẠI ĐÂY: Gỡ bỏ cú pháp sai 'gia_v ='
         gia_v = c3.number_input(f"Giá vốn {ma}", min_value=0, step=500, value=gia_mac_dinh, label_visibility="collapsed", key=f"gv_{ma}")
         
         du_lieu_cap_nhat[ma] = [sl, gia_v]
